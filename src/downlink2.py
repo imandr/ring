@@ -32,7 +32,7 @@ class DownLink(PyThread):
         else:
             s = socket(AF_INET, SOCK_STREAM)
             s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-            s.bind((gethostbyname(gethostname(), 0)))
+            s.bind((gethostbyname(gethostname()), 0))
             return None, s, s.getsockname()
 
     def run(self):
