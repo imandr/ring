@@ -1,16 +1,16 @@
 from pythreader import PyThread, Primitive, synchronized
 from socket import *
 import random
+from transmission import Transmission
 
 from py3 import to_str, to_bytes
 
 class DiagonalLink(PyThread):
 
-    def __init__(self, node, ip, port, max_diagonals = 3):
+    def __init__(self, node, address, max_diagonals = 3):
         PyThread.__init__(self)
         self.Node = node
-        self.Port = port
-        self.IP = ip
+        self.IP, self.Port = address
         self.Sock = None
         self.DiagonalNodes = []
         self.NDiagonals = max_diagonals
@@ -26,7 +26,7 @@ class DiagonalLink(PyThread):
                 # check source sock address here - later - FIXME
                 with self:
                     t = Transmission.from_bytes(data)
-                    self.Node.processTransmission(t, True)
+                    self.Node.routeTransmission(t, True)
                     
     @synchronized
     def setDiagonals(self, nodes):
@@ -38,5 +38,5 @@ class DiagonalLink(PyThread):
         ndiagonals = min(self.NDiagonals, len(self.DiagonalNodes))
         if ndiagonals:
             diagonals = random.sample(self.DiagonalNodes, ndiagonals)
-            for inx, ip, port in diagonals:
-                self.Sock.sendto(data, (ip, port))
+            for node_id, addr in diagonals:
+                self.Sock.sendto(data, addr)

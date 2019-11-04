@@ -20,13 +20,11 @@ class DownLink(PyThread):
 
         self.ListenSock = socket(AF_INET, SOCK_STREAM)
         self.ListenSock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-
-
-    def run(self):
-        
         self.ListenSock.bind((self.IP, self.Port))
         self.ListenSock.listen(1)
 
+    def run(self):
+        print("DownLink started")
         while True:
             lsn_fd = self.ListenSock.fileno()
             lst = [lsn_fd]
@@ -66,9 +64,8 @@ class DownLink(PyThread):
         self.DownStream.readMore(1024*1024, 10.0)
         while self.DownStream.msgReady():
             msg = self.DownStream.getMsg()
-            #print("receiveEdgeTransmission: msg:", msg)
             t = Transmission.from_bytes(msg)
-            self.Node.processTransmission(t, False)
+            self.Node.routeTransmission(t, False)
         if self.DownStream.EOF:
             self.DownStream.close()
             self.DownStream = None

@@ -47,50 +47,76 @@ class Link(Primitive):
         self.DiagonalLink = DiagonalLink(self, ip_bind, port)
         self.DownLink = DownLink(self, inx, ip_bind, port)
         self.UpLink = UpLink(self, inx, self.UpNodes)
-        self.NeedReceipt = set()
+        
+    @staticmethod
+    def flags(**args):
+        return Transmission.flags(**args)
         
     def init(self):
+        print("Link.init()")
         self.DownLink.start()
         self.DiagonalLink.start()
-        #self.UpLink.start()
+        self.UpLink.init()
         
-    def uplinkConnectedJ(self, j):
+    def uplinkConnected(self):
         print("Link: uplink connected to", self.UpNodes[j])
         diagonals = self.UpNodes[j+1:-1]    # exclude the uplink and self
         self.DiagonalLink.setDiagonals(diagonals)
         
     @synchronized
-    def send(self, payload, to=None, send_diagonal=True, cross_diagional=True):
-        t = Transmission(self.Index, to, payload, send_diagonal, cross_diagional)
+    def send(self, payload, to=Transmission.BROADCAST, flags=None):
+        if flags is None:   flags = Link.flags()        # defaults
+        t = Transmission(self.Index, to, payload, flags)
         tid = t.TID
         self.Seen.set(tid, (False, True, False))
         self.UpLink.send(t)
-        if send_diagonal:
+        if t.send_diagonal:
             self.Seen.set(tid, (False, True, True))
             self.DiagonalLink.send(t)
 
     @synchronized
-    def processTransmission(self, t, from_diagonal):
+    def routeTransmission(self, t, from_diagonal):
         #print("processTransmission", t.TID, t.Src, t.Dst, t.Payload, from_diagonal)
         tid = t.TID
-        seen_received, sent_up, sent_diag = self.Seen.get(tid, (False, False, False))
+        seen, sent_up, sent_diag = self.Seen.get(tid, (False, False, False))
 
         forward = True
         
-        if not seen_received:
-            if t.Dst == self.Index or t.is_broadcast:
-                forward = self.messageReceived(t.Src, t.Dst, t.Payload) != False
-                seen_received = True
-        if forward and t.Dst != self.Index:
-            if not sent_up and (not from_diagonal or t.cross_diagonal):
+        if not seen:
+            if t.broadcast:
+                if t.mutable:
+                    payload = self.processMessage(t.Src, t.Dst, t.Payload)
+                    if payload is not None:
+                        t.Payload = payload
+                    else:
+                        forward = False
+                else:
+                    forward = self.messageReceived(t.Src, t.Dst, t.Payload) != False
+            elif t.Dst == self.Index:
+                self.messageReceived(t.Src, t.Dst, t.Payload)
+                forward = False
+            seen = True
+            
+        if forward and (t.broadcast or t.Dst != self.Index):
+            if not sent_up and t.send_edge and (not from_diagonal or t.cross_to_diagonal):
                 sent_up = True
                 self.UpLink.send(t)
             
-            if not sent_diag and (from_diagonal or t.cross_diagonal):
+            if not sent_diag and t.send_diagonal and (from_diagonal or t.cross_to_diagonal):
                 sent_diag = True
                 self.DiagonalLink.send(t)
                 
-        self.Seen.set(tid, (seen_received, sent_up, sent_diag))
+        self.Seen.set(tid, (seen, sent_up, sent_diag))
+        
+    #
+    # virtual
+    #
             
     def messageReceived(self, src, dst, msg_bytes):
+        # returns False to stop forwarding
+        pass
+        
+    def processMessage(self, src, dst, msg_bytes):
+        # possibly mutate message
+        # return new msg_bytes or None to stop forwarding
         pass

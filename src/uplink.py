@@ -8,12 +8,14 @@ from py3 import to_str, to_bytes
 class UpLink(Primitive):
 
     def __init__(self, node, inx, nodes):
-        PyThread.__init__(self)
+        Primitive.__init__(self)
         self.Node = node
         self.Index = inx
         self.UpNodes = nodes            #[(inx, ip, port), ...]
         self.UpStream = None
         self.UpIndex = None
+
+    def init(self):
         self.connectUp()
 
     def connectStream(self, ip, port):
@@ -83,12 +85,11 @@ class UpLink(Primitive):
             if self.UpStream is None:
                 self.connectUp()
             if self.UpStream is not None:
-                nsent = self.UpStream.send(tbytes)
-                if nsent < len(tbytes):
+                sent = self.UpStream.send(tbytes)
+                #print("sent:", sent, tbytes)
+                if not sent:
                     self.UpStream.Sock.close()
                     self.UpStream = None
-                else:
-                    sent = True
                 
         
         
