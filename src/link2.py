@@ -72,6 +72,7 @@ class Link(Primitive):
         if t.send_diagonal:
             self.Seen.set(tid, (False, True, True))
             self.DiagonalLink.send(t)
+        return tid
 
     @synchronized
     def routeTransmission(self, t, from_diagonal):
