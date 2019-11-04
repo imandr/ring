@@ -1,5 +1,4 @@
 from pythreader import PyThread, Primitive, synchronized
-from SockStream import SockStream
 from socket import *
 import random, time, uuid
 from transmission import Transmission
