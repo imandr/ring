@@ -7,10 +7,10 @@ opts, args = getopt.getopt(sys.argv[1:], "c:n:")
 opts = dict(opts)
 name = opts.get("-n", "process#%d" % (os.getpid()))
 
-nodes = yaml.load(open(opts["-c"], "r"))["nodes"]
+nodes = yaml.load(open(opts["-c"], "r"), Loader=yaml.SafeLoader)["nodes"]
 nodes = [tuple(x) for x in nodes]
 
-print (nodes)
+#print (nodes)
 
 class MyLink(Link, PyThread):
     
@@ -22,13 +22,19 @@ class MyLink(Link, PyThread):
     def run(self):
         msgid = 0
         while True:
-            self.poll()
+            if random.random() < 0.5:
+                self.poll()
+            else:
+                self.twit()
             time.sleep(random.random()*10)
             
             
     def poll(self):
         #print ("Sending poll...")
         self.send("POLL %s" % (self.Name,), mutable=True, send_diagonal=False)
+        
+    def twit(self):
+        self.send("TWIT %s %s" % (self.Name, time.ctime(time.time())))
     
     def processMessage(self, tid, src, dst, msg_bytes):
         #print("processMessage: %s" % (msg_bytes,))
@@ -37,24 +43,29 @@ class MyLink(Link, PyThread):
             words = msg.split(" ",1)
             if src == self.ID:
                 nodes = words[1].split(",")
-                print ("POLL results:", nodes)
+                print ("Online:", ", ".join(nodes))
                 return None
             else:
                 msg += ",%s" % (self.Name,)
                 return to_bytes(msg)
+        elif msg.startswith("TWIT "):
+            words = msg.split(" ",2)
+            print("Twit from %s: %s" % (words[1], words[2]))
         else:
             #print("Unknown mutable message: %s" % (msg,))
             return None
             
     def upConnected(self, nid, addr):
-        print("UpLink connected to:  ", nid, addr)
+        #print("UpLink connected to:  ", nid, addr)
+        pass
             
     def downConnected(self, nid, addr):
-        print("DownLink connected to:", nid, addr)
+        #print("DownLink connected to:", nid, addr)
+        pass
             
 #link = MyLink(my_index, nodes)
 link = MyLink(nodes, name)
-print("link.init()...")
+#print("link.init()...")
 link.init()
 link.start()
 link.join()

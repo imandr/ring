@@ -14,7 +14,7 @@ class DownLink(PyThread):
         self.ListenSock = None
         self.DownStream = None
         self.Index, self.ListenSock, self.Address = self.bind(nodes)
-        print("DownLink bound to:", self.Address)
+        #print("DownLink bound to:", self.Address)
         self.ListenSock.listen()
         self.DownNodeAddress = None
         
@@ -26,7 +26,7 @@ class DownLink(PyThread):
                 s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
                 s.bind(addr)
             except Exception as e:
-                print(e)
+                pass
             else:
                 return i, s, s.getsockname()
         else:

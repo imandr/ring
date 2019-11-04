@@ -52,7 +52,7 @@ class Link(Primitive):
         return Transmission.flags(**args)
         
     def init(self):
-        print("Link.init()")
+        #print("Link.init()")
         self.DownLink.start()
         self.UpLink.start()
         self.DiagonalLink.start()
