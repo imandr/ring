@@ -1,5 +1,5 @@
 from pythreader import PyThread, Primitive, synchronized
-from SockStream import SockStream
+from MessageStream import MessageStream
 from socket import *
 import random, select
 from transmission import Transmission
@@ -14,7 +14,7 @@ class DownLink(PyThread):
         self.ListenSock = None
         self.DownStream = None
         self.Index, self.ListenSock, self.Address = self.bind(nodes)
-        #print("DownLink bound to:", self.Address)
+        print("DownLink bound to:", self.Address)
         self.ListenSock.listen()
         self.DownNodeAddress = None
         
@@ -49,13 +49,12 @@ class DownLink(PyThread):
             if lsn_fd in r:
                 self.acceptDownConnection()
             if down_fd in r or down_fd in e:
-                self.receiveEdgeTransmission()
+                self.readEdge()
                 
     def acceptDownConnection(self):
         #print ("acceptDownConnection()")
         sock, addr = self.ListenSock.accept()
-        
-        stream = SockStream(sock)
+        stream = MessageStream(sock)
         down_node_addr = None
         msg = stream.recv(tmo = 1.0)
         #print("DownLink: acceptDownConnection: HELLO message:", msg)
@@ -85,12 +84,11 @@ class DownLink(PyThread):
                 self.DownStream = stream
                 self.DownNodeAddress = down_node_addr
                 
-    def receiveEdgeTransmission(self):
-        self.DownStream.readMore(1024*1024, 10.0)
-        while self.DownStream.msgReady():
-            msg = self.DownStream.getMsg()
-            t = Transmission.from_bytes(msg)
-            self.Node.routeTransmission(t, False)
-        if self.DownStream.EOF:
+    def readEdge(self):
+        msg = self.DownStream.recv()
+        if msg is None:
             self.DownStream.close()
             self.DownStream = None
+        else:
+            t = Transmission.from_bytes(msg)
+            self.Node.routeTransmission(t, False)

@@ -1,5 +1,5 @@
 from pythreader import PyThread, Primitive, synchronized
-from SockStream import SockStream
+from MessageStream import MessageStream
 from socket import *
 import random, select, sys, traceback
 
@@ -18,20 +18,9 @@ class UpLink(PyThread):
         self.start()
 
     def connectStream(self, ip, port):
-        #print ("connectStream", ip, port)
-        sock = socket(AF_INET, SOCK_STREAM)
-        sock.settimeout(1.0)
-        try:    
-            #print("connecting to:", ip, port)
-            sock.connect((ip, port))
-            #print("connected")
+        try: stream = MessageStream((ip, port), 1.0)
         except:
-            #print ("UpLink.connectStream:",traceback.format_exc())
-            sock.close()
-            return None
-        stream = SockStream(sock)
-        sock.settimeout(None)
-        #print("connectStream: connected to:", ip, port)
+            stream = None
         return stream
 
     @synchronized
@@ -82,21 +71,19 @@ class UpLink(PyThread):
             eof = False
             while not eof:
                 #print("UpLink.run: readMore...")
-                self.UpStream.readMore()
                 self.UpStream.zing()
-                while not eof and self.UpStream.msgReady():
-                    msg = self.UpStream.getMsg()
-                    #print("UpLink.run: received:", msg)
-                    if msg.startswith("RECONNECT "):
+                while not eof:
+                    msg = self.UpStream.recv()
+                    if msg is None:
+                        eof = True
+                    elif msg.startswith("RECONNECT "):
                         cmd, ip, port = msg.split(None, 2)
                         connect_to = (ip, int(port))
                         eof = True
                 if eof or self.UpStream.eof():
-                    with self:
-                        #print("UpLink.run: closing uplink")
-                        self.UpStream.close()
+                    with self:      # why ?? 
                         self.UpStream = None
-                    eof = True
+                        eof = True
                             
     @synchronized
     def waitForConnection(self):
