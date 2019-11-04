@@ -63,7 +63,6 @@ class Link(PyThread):
     def down_disconnected(self):
         print("%s: down disconnected" % (self,))
         self.down = None
-        # disconnect up here ?
         self.wakeup()
         
     def run(self):
