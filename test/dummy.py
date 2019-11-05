@@ -30,10 +30,11 @@ class MyLink(Link, PyThread):
             
             
     def poll(self):
-        #print ("Sending poll...")
+        print ("Sending poll...")
         self.send("POLL %s" % (self.Name,), mutable=True, send_diagonal=False)
         
     def twit(self):
+        print ("Sending twit...")
         self.send("TWIT %s %s" % (self.Name, time.ctime(time.time())))
     
     def processMessage(self, tid, src, dst, msg_bytes):
