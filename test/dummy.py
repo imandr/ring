@@ -31,24 +31,26 @@ class MyLink(Link, PyThread):
             
     def poll(self):
         print ("Sending poll...")
-        self.send("POLL %s" % (self.Name,), mutable=True, send_diagonal=False)
+        self.sendRunner("POLL %s" % (self.Name,))
         
+    def runnerReturned(self, t):
+        msg = to_str(t.Payload)
+        if msg.startswith("POLL "):
+            words = msg.split(" ",1)
+            nodes = words[1].split(",")
+            print ("Online:", ", ".join(nodes))
+
     def twit(self):
         print ("Sending twit...")
         self.send("TWIT %s %s" % (self.Name, time.ctime(time.time())))
+        
     
-    def processMessage(self, tid, src, dst, msg_bytes):
+    def processMessage(self, t):
         #print("processMessage: %s" % (msg_bytes,))
-        msg = to_str(msg_bytes)
+        msg = to_str(t.Payload)
         if msg.startswith("POLL "):
-            words = msg.split(" ",1)
-            if src == self.ID:
-                nodes = words[1].split(",")
-                print ("Online:", ", ".join(nodes))
-                return None
-            else:
-                msg += ",%s" % (self.Name,)
-                return to_bytes(msg)
+            msg += ",%s" % (self.Name,)
+            return to_bytes(msg)
         elif msg.startswith("TWIT "):
             words = msg.split(" ",2)
             print("Twit from %s: %s" % (words[1], words[2]))

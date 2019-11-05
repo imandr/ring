@@ -12,6 +12,8 @@ class UpLink(PyThread):
         self.Node = node
         self.UpNodes = nodes            #[(inx, ip, port), ...]
         self.UpStream = None
+        self.UpNodeID = None
+        self.UpAddress = None
 
     def init(self):
         self.connect()
@@ -19,8 +21,11 @@ class UpLink(PyThread):
 
     def connectStream(self, ip, port):
         try: stream = MessageStream((ip, port), 1.0)
-        except:
+        except Exception as e:
+            print("connectStream: Error connecting to %s %s: %s" % (ip, port, e))
             stream = None
+        else:
+            print("connectStream: connected to:", ip, port)
         return stream
 
     @synchronized
@@ -32,7 +37,7 @@ class UpLink(PyThread):
             #print("senfing HELLO")
             ok = stream.sendAndRecv("HELLO %s %s %s" % (self.Node.ID, down_ip, down_port))
             #print("response to HELLO:", ok)
-            if ok.startswith("OK "):
+            if ok and ok.startswith("OK "):
                 words = ok.split(None,1)
                 self.UpStream = stream
                 self.UpAddress = (ip, port)

@@ -25,6 +25,16 @@ class Transmission(object):
         self.Flags = flags
         self.Payload = payload
         
+    def __str__(self):
+        flags = self.Flags
+        flags_str = ('s' if flags & self.FLAG_SYSTEM else '-') \
+            + ('m' if flags & self.FLAG_MUTABLE else '-') \
+            + ('d' if flags & self.FLAG_CROSS_TO_DIAGONAL else '-') \
+            + ('e' if flags & self.FLAG_CROSS_TO_EDGE else '-') \
+            + ('D' if flags & self.FLAG_SEND_DIAGONAL else '-') \
+            + ('E' if flags & self.FLAG_SEND_EDGE else '-')
+        return '[Transmission id=%s flags=%s %s->%s %s]' % (self.TID, flags_str, self.Src, self.Dst, repr(self.Payload))
+        
     @staticmethod
     def flags(send_edge = True, send_diagonal = True, cross_to_edge = True, cross_to_diagonal = True,
                 mutable = False, system = False):
@@ -63,6 +73,10 @@ class Transmission(object):
     @property
     def system(self):
         return (self.FLAG_SYSTEM & self.Flags) != 0
+
+    @property
+    def runner(self):
+        return self.broadcast and not self.send_diagonal
         
     def to_bytes(self):
         #print("flags:", self.Flags, type(self.Flags))

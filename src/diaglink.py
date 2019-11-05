@@ -24,13 +24,15 @@ class DiagonalLink(PyThread):
             data, addr = self.Sock.recvfrom(65000)
             if data:
                 # check source sock address here - later - FIXME
-                with self:
-                    t = Transmission.from_bytes(data)
-                    self.Node.routeTransmission(t, True)
+                t = Transmission.from_bytes(data)
+                #print("DiagonalLink: received:", t)
+                self.Node.routeTransmission(t, True)
                     
     @synchronized
     def setDiagonals(self, nodes):
+        #self.DiagonalNodes = []
         self.DiagonalNodes = nodes[:]
+        #print ("DiagonalLink: set diagonals to:", nodes)
 
     @synchronized
     def send(self, transmission):
@@ -39,4 +41,5 @@ class DiagonalLink(PyThread):
         if ndiagonals:
             diagonals = random.sample(self.DiagonalNodes, ndiagonals)
             for node_id, addr in diagonals:
+                #print("DiagonalLink: sending to:", addr)
                 self.Sock.sendto(data, addr)

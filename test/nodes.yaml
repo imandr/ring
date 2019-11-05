@@ -1,5 +1,4 @@
 nodes:
-    - [dbdev101.fnal.gov, 4001]
-    - [dbdev102.fnal.gov, 4001]
-    - [dbdev103.fnal.gov, 4001]
-    - [dbdev104.fnal.gov, 4001]
+    - [localhost, 4000]
+    - [localhost, 4001]
+    - [localhost, 4002]

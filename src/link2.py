@@ -32,6 +32,17 @@ class SeenMemory(Primitive):
             lst = sorted(self.Memory.items(), key=lambda x: x[1][0], reversed=True)
             self.Memory = dict(lst[:self.LowWater])
 
+class Poller(PyThread):
+    def __init__(self, link):
+        PyThread.__init__(self)
+        self.Link = link
+        
+    def run(self):
+        while True:
+            self.Link._send_system_poll()
+            time.sleep(10.0+random.random())
+        self.Link = None
+
 class Link(Primitive):
     
     def __init__(self, nodes):
@@ -46,6 +57,7 @@ class Link(Primitive):
         self.UpLink = UpLink(self, up_nodes)
         self.DiagonalLink = DiagonalLink(self, self.DownLink.Address)
         self.Map = []
+        self.Poller = Poller(self)
         
     @staticmethod
     def flags(**args):
@@ -56,7 +68,7 @@ class Link(Primitive):
         self.DownLink.start()
         self.UpLink.start()
         self.DiagonalLink.start()
-        self.send_poll()
+        self.Poller.start()
         
     def downLinkAddress(self):
         return self.DownLink.Address
@@ -74,9 +86,13 @@ class Link(Primitive):
         return tid
 
     @synchronized
+    def sendRunner(self, payload, mutable=True, system=False):
+        self.send(payload, Transmission.BROADCAST, send_diagonal=False, mutable=mutable, system=system)
+
+    @synchronized
     def routeTransmission(self, t, from_diagonal):
         
-        #print("routeTransmission:",t.Flags,t.Payload)
+        #print("routeTransmission: from_diagonal=%s %s" % (from_diagonal, t))
 
         tid = t.TID
         seen, sent_up, sent_diag = self.Seen.get(tid, (False, False, False))
@@ -86,10 +102,18 @@ class Link(Primitive):
             forward = True
             seen = True
             if t.broadcast or t.Dst == self.ID:
+                ret = None
                 if t.system:
                     ret = self._process_system_message(t)
                 else:
-                    ret = self.processMessage(t.TID, t.Src, t.Dst, t.Payload)
+                    if t.broadcast \
+                                and not t.send_diagonal \
+                                and t.Src == self.ID:
+                        #print("routeTransmission: runnerReturned")
+                        self.runnerReturned(t)
+                    else:
+                        #print("routeTransmission: processMessage")
+                        ret = self.processMessage(t)
                 if ret is not None and t.mutable:
                     t.Payload = ret
 
@@ -112,7 +136,7 @@ class Link(Primitive):
     def _process_system_message(self, t):
         #print("_process_system_message:",t.Flags,t.Payload)
         payload = t.Payload
-        if payload.startswith("POLL"):
+        if payload.startswith(".POLL"):
             return self._process_system_poll(t)
             
     def _process_system_poll(self, t):
@@ -120,7 +144,7 @@ class Link(Primitive):
         words = payload.split()
         cmd = words[0]
         args = words[1:]
-        assert cmd == "POLL"
+        assert cmd == ".POLL"
         if t.Src == self.ID:
             lst = [arg.split(':',2) for arg in args]
             lst = [(node_id, (ip, int(port))) for node_id, ip, port in lst]
@@ -130,10 +154,9 @@ class Link(Primitive):
             payload += " %s:%s:%d" % (self.ID, down_ip, down_port)
             return payload
             
-    def send_poll(self):
+    def _send_system_poll(self):
         ip, port = self.downLinkAddress()
-        self.send("POLL %s:%s:%d" % (self.ID, ip, port), 
-                mutable=True, send_diagonal=False, system=True)
+        self.sendRunner(".POLL %s:%s:%d" % (self.ID, ip, port), mutable=True, system=True)
         
     def _update_map(self, lst):
         #print("Link._update_map:", lst)
@@ -144,9 +167,12 @@ class Link(Primitive):
     # virtual
     #
             
-    def processMessage(self, tid, src, dst, msg_bytes):
+    def processMessage(self, t):
         # possibly mutate message
         # return new msg_bytes or None
+        pass
+        
+    def runnerReturned(self, t):
         pass
         
     def downConnected(self, node_id, addr):
