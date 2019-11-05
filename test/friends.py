@@ -1,16 +1,6 @@
-from link2 import Link
+from ring import Link, to_str, to_bytes
 import yaml, sys, getopt, time, random, os
 from pythreader import PyThread
-from py3 import to_str, to_bytes
-
-opts, args = getopt.getopt(sys.argv[1:], "c:n:")
-opts = dict(opts)
-name = opts.get("-n", "process#%d" % (os.getpid()))
-
-nodes = yaml.load(open(opts["-c"], "r"), Loader=yaml.SafeLoader)["nodes"]
-nodes = [tuple(x) for x in nodes]
-
-#print (nodes)
 
 class MyLink(Link, PyThread):
     
@@ -69,6 +59,12 @@ class MyLink(Link, PyThread):
             #print("Unknown mutable message: %s" % (msg,))
             return None
             
+opts, args = getopt.getopt(sys.argv[1:], "c:n:")
+opts = dict(opts)
+name = opts.get("-n", "process#%d" % (os.getpid()))
+
+nodes = yaml.load(open(opts["-c"], "r"), Loader=yaml.SafeLoader)["nodes"]
+nodes = [tuple(x) for x in nodes]
 #link = MyLink(my_index, nodes)
 link = MyLink(nodes, name)
 #print("link.init()...")

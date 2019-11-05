@@ -1,10 +1,10 @@
 from pythreader import PyThread, Primitive, synchronized
 from socket import *
 import random, time, uuid
-from transmission import Transmission
-from uplink2 import UpLink
-from downlink3 import DownLink
-from diaglink import DiagonalLink
+from .transmission import Transmission
+from .uplink2 import UpLink
+from .downlink3 import DownLink
+from .diaglink import DiagonalLink
 
 class SeenMemory(Primitive):
     def __init__(self, capacity, lowwater=None):

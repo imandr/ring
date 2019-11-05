@@ -3,7 +3,7 @@ from MessageStream import MessageStream
 from socket import *
 import random, select, sys, traceback
 
-from py3 import to_str, to_bytes
+from .py3 import to_str, to_bytes
 
 class UpLink(PyThread):
 

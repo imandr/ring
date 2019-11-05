@@ -1,9 +1,9 @@
 from pythreader import PyThread, Primitive, synchronized
 from socket import *
 import random
-from transmission import Transmission
+from .transmission import Transmission
 
-from py3 import to_str, to_bytes
+from .py3 import to_str, to_bytes
 
 class DiagonalLink(PyThread):
 

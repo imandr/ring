@@ -2,9 +2,9 @@ from pythreader import PyThread, Primitive, synchronized
 from MessageStream import MessageStream
 from socket import *
 import random, select
-from transmission import Transmission
+from .transmission import Transmission
 
-from py3 import to_str, to_bytes
+from .py3 import to_str, to_bytes
 
 class DownConnection(PyThread):
     
