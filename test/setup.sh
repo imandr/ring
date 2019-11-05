@@ -1,2 +1,2 @@
-export PYTHONPATH=`pwd`/../../fcslib:`pwd`/../src:${HOME}/products/pythreader/current
+export PYTHONPATH=`pwd`/../../fcslib:`pwd`/../src:${HOME}/git/pythreader
 

@@ -19,6 +19,10 @@ class MyLink(Link, PyThread):
         Link.__init__(self, nodes)
         self.Name = name
         
+    def initialized(self):
+        print ("Initialized")
+        self.send("HELLO %s" % (self.Name,))
+        
     def run(self):
         msgid = 0
         while True:
@@ -51,6 +55,8 @@ class MyLink(Link, PyThread):
         if msg.startswith("POLL "):
             msg += ",%s" % (self.Name,)
             return to_bytes(msg)
+        elif msg.startswith("HELLO ") and t.Src != self.ID:
+            print("%s joined" % (msg.split(None, 1)[1],))
         elif msg.startswith("TWIT "):
             words = msg.split(" ",2)
             print("Twit from %s: %s" % (words[1], words[2]))
@@ -59,11 +65,11 @@ class MyLink(Link, PyThread):
             return None
             
     def upConnected(self, nid, addr):
-        #print("UpLink connected to:  ", nid, addr)
+        print("UpLink---> connected to:  ", nid, addr)
         pass
             
     def downConnected(self, nid, addr):
-        #print("DownLink connected to:", nid, addr)
+        print("--->DownLink connected to:", nid, addr)
         pass
             
 #link = MyLink(my_index, nodes)

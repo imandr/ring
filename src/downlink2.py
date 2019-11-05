@@ -44,8 +44,9 @@ class DownLink(PyThread):
             if self.DownStream is not None:
                 down_fd = self.DownStream.fileno()
                 lst.append(down_fd)
+            print("DownLink.run: selecting...", lst)
             r, w, e = select.select(lst, [], lst, 10.0)
-            #print (r,w,e)
+            print("DownLink.run: selected", r, w, e)
             if lsn_fd in r:
                 self.acceptDownConnection()
             if down_fd in r or down_fd in e:

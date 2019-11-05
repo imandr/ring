@@ -2,6 +2,20 @@ import time, uuid
 
 from py3 import to_str, to_bytes
 
+#
+# Messge types:
+#
+# Runner: broadcast, send_diagonal = False
+#    mutable
+#    immutable
+#.   can be confirmed
+#
+# Shout: broadcast, send_diagonal = True, cross_to_diagonal = True, cross_to_edge = True
+#.   can not be confirmed
+#
+# Point-to-point: send_diagonal = True, cross_to_diagonal = True, cross_to_edge = True
+#
+
 class Transmission(object):
 
     BROADCAST = "*"      # dest -> BROADCAST
@@ -14,6 +28,9 @@ class Transmission(object):
     FLAG_SYSTEM = 32
     
     FLAGS_DEFAULT = FLAG_SEND_EDGE | FLAG_SEND_DIAGONAL | FLAG_CROSS_TO_DIAGONAL | FLAG_CROSS_TO_EDGE
+    FLAGS_RUNNER = FLAG_SEND_EDGE
+    FLAGS_SHOUT = FLAG_SEND_EDGE | FLAG_SEND_DIAGONAL | FLAG_CROSS_TO_DIAGONAL | FLAG_CROSS_TO_EDGE
+    FLAGS_POINT_TO_POINT = FLAG_SEND_EDGE | FLAG_SEND_DIAGONAL | FLAG_CROSS_TO_DIAGONAL | FLAG_CROSS_TO_EDGE
 
     def __init__(self, source_id, dest_id, payload, flags=None, **args):
         t = time.time()

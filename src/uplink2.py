@@ -34,9 +34,9 @@ class UpLink(PyThread):
         stream = self.connectStream(ip, port)
         if stream is not None:
             down_ip, down_port = self.Node.downLinkAddress()
-            #print("senfing HELLO")
+            print("connect_to: senfing HELLO")
             ok = stream.sendAndRecv("HELLO %s %s %s" % (self.Node.ID, down_ip, down_port))
-            #print("response to HELLO:", ok)
+            print("connect_to: response to HELLO:", ok)
             if ok and ok.startswith("OK "):
                 words = ok.split(None,1)
                 self.UpStream = stream

@@ -69,17 +69,18 @@ class Link(Primitive):
         self.UpLink.start()
         self.DiagonalLink.start()
         self.Poller.start()
+        self.initialized()
         
     def downLinkAddress(self):
         return self.DownLink.Address
         
     @synchronized
     def send(self, payload, to=Transmission.BROADCAST, **flags):
-        if flags is None:   flags = Link.flags()        # defaults
         t = Transmission(self.ID, to, payload, **flags)
         tid = t.TID
         self.Seen.set(tid, (False, True, False))
         self.UpLink.send(t)
+        print("Link.send(): sent:", t)
         if t.send_diagonal:
             self.Seen.set(tid, (False, True, True))
             self.DiagonalLink.send(t)
@@ -87,7 +88,10 @@ class Link(Primitive):
 
     @synchronized
     def sendRunner(self, payload, mutable=True, system=False):
-        self.send(payload, Transmission.BROADCAST, send_diagonal=False, mutable=mutable, system=system)
+        flags = Transmission.FLAGS_RUNNER
+        if mutable: flags |= Transmission.FLAG_MUTABLE
+        if system: flags |= Transmission.FLAG_SYSTEM
+        self.send(payload, flags=flags)
 
     @synchronized
     def routeTransmission(self, t, from_diagonal):
@@ -179,5 +183,8 @@ class Link(Primitive):
         pass
 
     def upConnected(self, node_id, addr):
+        pass
+        
+    def initialized(self):
         pass
         
