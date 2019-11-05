@@ -1,4 +1,4 @@
-BINFILES = friends.py
+BINFILES = friends.py nodes.yaml-template
 
 BINDIR = $(DSTROOT)/bin
 
