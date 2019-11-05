@@ -33,7 +33,7 @@ class MyLink(Link, PyThread):
             time.sleep(random.random()*10+1.0)
             
     def poll(self):
-        #print ("Sending poll...")
+        print (">> poll")
         self.sendRunner("POLL %s" % (self.Name,))
         
     def runnerReturned(self, t):
@@ -41,10 +41,11 @@ class MyLink(Link, PyThread):
         if msg.startswith("POLL "):
             words = msg.split(" ",1)
             nodes = words[1].split(",")
-            print ("Online:", ", ".join(nodes))
+            print ("<<       online:", ", ".join(nodes))
 
     def twit(self):
-        #print ("Sending twit...")
+        msg = time.ctime(time.time())
+        print (">> twit", msg)
         self.send("TWIT %s %s" % (self.Name, time.ctime(time.time())))
         
     
@@ -55,25 +56,18 @@ class MyLink(Link, PyThread):
             msg += ",%s" % (self.Name,)
             return to_bytes(msg)
         elif msg.startswith("HELLO ") and t.Src != self.ID:
-            print("%s joined" % (msg.split(None, 1)[1],))
+            print("<<       %s joined" % (msg.split(None, 1)[1],))
+            print (">> welcome to", msg.split(None, 1)[1])
             self.send("WELCOME %s" % (self.Name,), to=t.Src)
         elif msg.startswith("WELCOME "):
-            print("Welcome from %s" % (msg.split(None, 1)[1]))
+            print("<<       welcome from %s" % (msg.split(None, 1)[1]))
         elif msg.startswith("TWIT "):
             if t.Src != self.ID:
                 words = msg.split(" ",2)
-                print("Twit from %s: %s" % (words[1], words[2]))
+                print("<<       twit from %s: %s" % (words[1], words[2]))
         else:
             #print("Unknown mutable message: %s" % (msg,))
             return None
-            
-    def upConnected(self, nid, addr):
-        #print("UpLink---> connected to:  ", nid, addr)
-        pass
-            
-    def downConnected(self, nid, addr):
-        #print("--->DownLink connected to:", nid, addr)
-        pass
             
 #link = MyLink(my_index, nodes)
 link = MyLink(nodes, name)
