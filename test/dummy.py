@@ -20,7 +20,7 @@ class MyLink(Link, PyThread):
         self.Name = name
         
     def initialized(self):
-        print ("Initialized")
+        #print ("Initialized")
         self.send("HELLO %s" % (self.Name,))
         
     def run(self):
@@ -30,11 +30,10 @@ class MyLink(Link, PyThread):
                 self.poll()
             else:
                 self.twit()
-            time.sleep(random.random()*10)
-            
+            time.sleep(random.random()*10+1.0)
             
     def poll(self):
-        print ("Sending poll...")
+        #print ("Sending poll...")
         self.sendRunner("POLL %s" % (self.Name,))
         
     def runnerReturned(self, t):
@@ -45,7 +44,7 @@ class MyLink(Link, PyThread):
             print ("Online:", ", ".join(nodes))
 
     def twit(self):
-        print ("Sending twit...")
+        #print ("Sending twit...")
         self.send("TWIT %s %s" % (self.Name, time.ctime(time.time())))
         
     
@@ -57,19 +56,23 @@ class MyLink(Link, PyThread):
             return to_bytes(msg)
         elif msg.startswith("HELLO ") and t.Src != self.ID:
             print("%s joined" % (msg.split(None, 1)[1],))
+            self.send("WELCOME %s" % (self.Name,), to=t.Src)
+        elif msg.startswith("WELCOME "):
+            print("Welcome from %s" % (msg.split(None, 1)[1]))
         elif msg.startswith("TWIT "):
-            words = msg.split(" ",2)
-            print("Twit from %s: %s" % (words[1], words[2]))
+            if t.Src != self.ID:
+                words = msg.split(" ",2)
+                print("Twit from %s: %s" % (words[1], words[2]))
         else:
             #print("Unknown mutable message: %s" % (msg,))
             return None
             
     def upConnected(self, nid, addr):
-        print("UpLink---> connected to:  ", nid, addr)
+        #print("UpLink---> connected to:  ", nid, addr)
         pass
             
     def downConnected(self, nid, addr):
-        print("--->DownLink connected to:", nid, addr)
+        #print("--->DownLink connected to:", nid, addr)
         pass
             
 #link = MyLink(my_index, nodes)

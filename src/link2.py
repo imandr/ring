@@ -3,7 +3,7 @@ from socket import *
 import random, time, uuid
 from transmission import Transmission
 from uplink2 import UpLink
-from downlink2 import DownLink
+from downlink3 import DownLink
 from diaglink import DiagonalLink
 
 class SeenMemory(Primitive):
@@ -80,7 +80,7 @@ class Link(Primitive):
         tid = t.TID
         self.Seen.set(tid, (False, True, False))
         self.UpLink.send(t)
-        print("Link.send(): sent:", t)
+        #print("Link.send(): sent:", t)
         if t.send_diagonal:
             self.Seen.set(tid, (False, True, True))
             self.DiagonalLink.send(t)
@@ -180,6 +180,9 @@ class Link(Primitive):
         pass
         
     def downConnected(self, node_id, addr):
+        pass
+
+    def downDisconnected(self):
         pass
 
     def upConnected(self, node_id, addr):

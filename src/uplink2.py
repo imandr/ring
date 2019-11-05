@@ -22,10 +22,11 @@ class UpLink(PyThread):
     def connectStream(self, ip, port):
         try: stream = MessageStream((ip, port), 1.0)
         except Exception as e:
-            print("connectStream: Error connecting to %s %s: %s" % (ip, port, e))
+            #print("connectStream: Error connecting to %s %s: %s" % (ip, port, e))
             stream = None
         else:
-            print("connectStream: connected to:", ip, port)
+            #print("connectStream: connected to:", ip, port)
+            pass
         return stream
 
     @synchronized
@@ -33,10 +34,11 @@ class UpLink(PyThread):
         #print ("UpLink.connect_to(%s, %d)..." % (ip, port))
         stream = self.connectStream(ip, port)
         if stream is not None:
+            #print ("UpLink: connect_to: connected to:", ip, port)
             down_ip, down_port = self.Node.downLinkAddress()
-            print("connect_to: senfing HELLO")
+            #print("connect_to: sending HELLO")
             ok = stream.sendAndRecv("HELLO %s %s %s" % (self.Node.ID, down_ip, down_port))
-            print("connect_to: response to HELLO:", ok)
+            #print("connect_to: response to HELLO:", ok)
             if ok and ok.startswith("OK "):
                 words = ok.split(None,1)
                 self.UpStream = stream
