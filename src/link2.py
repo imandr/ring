@@ -6,6 +6,8 @@ from .uplink2 import UpLink
 from .downlink3 import DownLink
 from .diaglink import DiagonalLink
 
+from .version import Version
+
 class SeenMemory(Primitive):
     def __init__(self, capacity, lowwater=None):
             Primitive.__init__(self)
@@ -44,6 +46,8 @@ class Poller(PyThread):
         self.Link = None
 
 class Link(Primitive):
+    
+    Version = Version
     
     def __init__(self, nodes):
         Primitive.__init__(self)

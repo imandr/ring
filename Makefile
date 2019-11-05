@@ -6,7 +6,7 @@ TARFILE = $(TARDIR)/ring_$(VERSION).tar
 all:	clean build tarfile
 	
 build:	$(DSTROOT)
-	cd src; make DSTROOT=$(DSTROOT) build
+	cd src; make DSTROOT=$(DSTROOT) VERSION=$(VERSION) build
 	cd test; make DSTROOT=$(DSTROOT) build
 	
 tarfile: $(TARDIR)
