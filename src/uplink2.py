@@ -1,5 +1,5 @@
 from pythreader import PyThread, Primitive, synchronized
-from MessageStream import MessageStream
+from fcslib import MessageStream
 from socket import *
 import random, select, sys, traceback
 

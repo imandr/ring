@@ -45,12 +45,13 @@ class Poller(PyThread):
             time.sleep(10.0+random.random())
         self.Link = None
 
-class Link(Primitive):
+class EtherLink(Primitive):
     
     Version = Version
     
-    def __init__(self, nodes):
+    def __init__(self, nodes, delegate = None):
         Primitive.__init__(self)
+        self.Delegate = None
         self.ID = uuid.uuid1().hex
         self.Seen = SeenMemory(10000)               # data: (seen, sent_edge, sent_diagonal)
         self.DownLink = DownLink(self, nodes)
@@ -67,35 +68,39 @@ class Link(Primitive):
     def flags(**args):
         return Transmission.flags(**args)
         
-    def init(self):
+    def init(self, delegate = None):
         #print("Link.init()")
+        self.Delegate = delegate
         self.DownLink.start()
         self.UpLink.start()
         self.DiagonalLink.start()
         self.Poller.start()
-        self.initialized()
+        if self.Delegate is not None:
+            self.Delegate.initialized()
         
     def downLinkAddress(self):
         return self.DownLink.Address
-        
-    @synchronized
-    def send(self, payload, to=Transmission.BROADCAST, **flags):
-        t = Transmission(self.ID, to, payload, **flags)
+
+    def _transmit(self, t):
         tid = t.TID
         self.Seen.set(tid, (False, True, False))
         self.UpLink.send(t)
-        #print("Link.send(): sent:", t)
         if t.send_diagonal:
             self.Seen.set(tid, (False, True, True))
             self.DiagonalLink.send(t)
         return tid
 
     @synchronized
-    def sendRunner(self, payload, mutable=True, system=False):
-        flags = Transmission.FLAGS_RUNNER
-        if mutable: flags |= Transmission.FLAG_MUTABLE
-        if system: flags |= Transmission.FLAG_SYSTEM
-        self.send(payload, flags=flags)
+    def send(self, payload, to, system=False):
+        assert to != Transmission.BROADCAST, "Use EtherLink.broadcast() to send broadcast messages"
+        t = Transmission(self.ID, to, payload, send_diagonal = True, system=system)
+        return self._transmit(t)
+
+    @synchronized
+    def broadcast(self, payload, fast=False, guaranteed=False, mutable=False, system=False):
+        t = Transmission(self.ID, Transmission.BROADCAST, payload, 
+            send_diagonal = fast, cross_to_edge = not guaranteed, mutable=mutable, system=system)
+        return self._transmit(t)
 
     @synchronized
     def routeTransmission(self, t, from_diagonal):
@@ -115,13 +120,13 @@ class Link(Primitive):
                     ret = self._process_system_message(t)
                 else:
                     if t.broadcast \
-                                and not t.send_diagonal \
                                 and t.Src == self.ID:
                         #print("routeTransmission: runnerReturned")
-                        self.runnerReturned(t)
+                        if self.Delegate is not None:
+                            self.Delegate.messageReturned(t)
                     else:
-                        #print("routeTransmission: processMessage")
-                        ret = self.processMessage(t)
+                        if self.Delegate is not None:
+                            ret = self.Delegate.messageReceived(t)
                 if ret is not None and t.mutable:
                     t.Payload = ret
 
@@ -164,24 +169,12 @@ class Link(Primitive):
             
     def _send_system_poll(self):
         ip, port = self.downLinkAddress()
-        self.sendRunner(".POLL %s:%s:%d" % (self.ID, ip, port), mutable=True, system=True)
+        self.broadcast(".POLL %s:%s:%d" % (self.ID, ip, port), mutable=True, system=True, fast=False, guaranteed=True)
         
     def _update_map(self, lst):
         #print("Link._update_map:", lst)
         self.Map = lst[:]
         self.DiagonalLink.setDiagonals(self.Map[1:-1])  # remove up node and self
-        
-    #
-    # virtual
-    #
-            
-    def processMessage(self, t):
-        # possibly mutate message
-        # return new msg_bytes or None
-        pass
-        
-    def runnerReturned(self, t):
-        pass
         
     def downConnected(self, node_id, addr):
         pass
@@ -192,6 +185,7 @@ class Link(Primitive):
     def upConnected(self, node_id, addr):
         pass
         
-    def initialized(self):
+    def upDisconnected(self):
         pass
+        
         
