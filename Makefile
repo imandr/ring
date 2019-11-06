@@ -17,4 +17,7 @@ clean:
 	
 $(DSTROOT):
 	mkdir -p $@
+
+$(TARDIR):
+	mkdir -p $@
 	
