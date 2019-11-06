@@ -5,15 +5,8 @@ from .py3 import to_str, to_bytes
 #
 # Messge types:
 #
-# Runner: broadcast, send_diagonal = False
-#    mutable
-#    immutable
-#.   can be confirmed
+# Broadcast:
 #
-# Shout: broadcast, send_diagonal = True, cross_to_diagonal = True, cross_to_edge = True
-#.   can not be confirmed
-#
-# Point-to-point: send_diagonal = True, cross_to_diagonal = True, cross_to_edge = True
 #
 
 class Transmission(object):
