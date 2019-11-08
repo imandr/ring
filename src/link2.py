@@ -65,8 +65,12 @@ class EtherLink(Primitive):
         self.Poller = Poller(self)
         
     @property
-    def downLinkID(self):
+    def downID(self):
         return self.DownLink.downLinkID
+        
+    @property
+    def upID(self):
+        return self.UpLink.upLinkID
         
     @staticmethod
     def flags(**args):
@@ -95,9 +99,9 @@ class EtherLink(Primitive):
         return tid
 
     @synchronized
-    def send(self, payload, to, system=False):
+    def send(self, payload, to, system=False, send_diagonal=True):
         assert to != Transmission.BROADCAST, "Use EtherLink.broadcast() to send broadcast messages"
-        t = Transmission(self.ID, to, payload, send_diagonal = True, system=system)
+        t = Transmission(self.ID, to, payload, send_diagonal = send_diagonal, system=system)
         return self._transmit(t)
 
     @synchronized
@@ -135,7 +139,7 @@ class EtherLink(Primitive):
                     t.Payload = ret
 
             if t.broadcast:
-                forward = (t.Src != self.ID)
+                forward = (len(ret) > 0) and (t.Src != self.ID)
             else:
                 forward = (t.Dst != self.ID)
             
@@ -184,6 +188,8 @@ class EtherLink(Primitive):
     def downConnected(self, node_id, addr):
         self.DownNodeID = node_id
         self.DownNodeAddress = addr
+        if self.Delegate is not None and hasattr(self.Delegate, "downConnected"):
+            self.Delegate.downConnected(node_id, addr)
         self.wakeup()
     
     @synchronized
@@ -201,6 +207,8 @@ class EtherLink(Primitive):
     def upConnected(self, node_id, addr):
         self.UpNodeID = node_id
         self.UpNodeAddress = addr
+        if self.Delegate is not None and hasattr(self.Delegate, "upConnected"):
+            self.Delegate.upConnected(node_id, addr)
         self.wakeup()
         
     @synchronized

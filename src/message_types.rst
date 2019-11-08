@@ -29,7 +29,7 @@ Guaranteed to reach all nodes. Can be confirmed.
  Direct             fast               EDed      fast     yes          no             no
  Direct             sequential         E-e-      slow     yes          no             yes
  Broadcast          fast unconfirmed   EDed      fastest  yes          no             no
- Broadcast          fast confirmed     ED-d      fast.    yes          yes            no
+ Broadcast          fast confirmed     ED-d      fast    yes          yes            no
  Broadcast          slow confirmed     E-e-      slow     yes          yes            yes
 ==============      ================= ========= ======== ============ ============== =============
  

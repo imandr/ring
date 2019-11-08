@@ -14,6 +14,10 @@ class UpLink(PyThread):
         self.UpStream = None
         self.UpNodeID = None
         self.UpAddress = None
+        
+    @property
+    def upLinkID(self):
+        return self.UpNodeID
 
     def init(self):
         self.connect()
@@ -44,6 +48,7 @@ class UpLink(PyThread):
                 self.UpStream = stream
                 self.UpAddress = (ip, port)
                 self.UpNodeID = words[1]
+                self.Node.upConnected(self.UpNodeID, self.UpAddress)
                 self.wakeup()
                 return True
             else:

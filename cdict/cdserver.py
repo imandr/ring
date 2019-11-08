@@ -10,8 +10,7 @@ class CDServer(Primitive):
         self.Data = {}
         self.Ether = ether
         self.Synchronized = False
-        self.SentUpdates = {}           # {tid -> (key, value)}
-        self.SentLog = []               # [tid,..]
+        self.PendingUpdates = {}        # key -> value
         
     def initialized(self):
         while not self.Synchronized:
@@ -21,9 +20,11 @@ class CDServer(Primitive):
             
     def messageReceived(self, t):
         msg = t.Payload
+        cmd, rest = msg.split(None, 1) if ' ' in msg else (msg, "")
         if not self.Synchronized:
-            if t.Dst == self.Ether.ID and msg.startswith("SYNC "):
-                data = msg.split(None, 1)[1]
+            if cmd == "SYNC":
+                assert t.Dst == self.ID             # SYNC is always sent from immediate down connection
+                data = rest
                 if data == ".":
                     self.Synchronized = True
                     self.wakeup()
@@ -31,36 +32,48 @@ class CDServer(Primitive):
                     data = json.lods(data)
                     self.Data.update(data)
                     
-        elif msg == "SYNCR":
+        elif cmd == "SYNCR" and t.Str == self.Ether.upID: # SYNC is always sent from immediate down connection to immediate up
             data = list(self.Data.items())
             n = len(data)
             for i in range(0, n, 10):
                 batch = dict(data[i:i+10])
                 if batch:
-                    self.Ether.send("SYNC %s" % (json.dumps(batch),), t.Src)
-            self.Ether.send("SYNC .", t.Src)
+                    # SYNC is always sent from immediate down connection to immediate up
+                    self.Ether.send("SYNC %s" % (json.dumps(batch),), t.Src, send_diagonal=False) 
+            self.Ether.send("SYNC .", t.Src, send_diagonal=False)
             
-        elif t.broadcast and msg.startswith("UPDATE "):
-            data = msg.split(None, 1)[1]
-            data = json.lods(data)
+        elif cmd == "UPDATE":
+            data = json.lods(rest)
             self.Data.update(data)
-
-    @synchronized
-    def messageReturned(self, t):
-        inx = self.SentLog.index(t.TID)
-        if inx > 0:
-            # some messages sent earlier got lost
-            for tid in self.SentLog[:inx]:
-                name, value = self.SentUpdates.pop(tid)
-                self.sendUpdate(name, value)
-            self.SentLog = self.SentLog[inx+1:]
-                
-    def sendUpdate(self, name, value)
-        tid = self.Ether.broadcast("UPDATE %s" % (json.dumps({name:value}),))
-        self.SentUpdates[tid] = (name, value)
-        self.SentLog.append(tid)
-        return tid
             
+        elif cmd == "LOCK":
+            if self.PendingUpdates:
+                self.sendUpdates()
+                return "LOCK %s" % (self.Ether.ID,)         # send the lock back to me
+            self.HaveLock = False
+            # lock will be forwarded now
+            
+    @synchronized
+    def sendUpdates(self):
+        data = json.dumps(self.PendingUpdates)
+        self.Ether.broadcast("UPDATE %s" % (data,))        
+    
+    def messageReturned(self, t):
+        msg = t.Payload
+        cmd, rest = msg.split(None, 1) if ' ' in msg else (msg, "")
+        if cmd == "LOCK":       # my own lock request
+            self.HaveLock = True
+            if self.PendingUpdates:
+                self.sendUpdates()      # resend them
+                self.Ether.broadcast("LOCK %s" % (self.Ether.ID,)) 
+
+        elif cmd == "UPDATE":       # my own update returned
+            data = json.lods(rest)
+            for k, v in data.items():
+                if k in self.PendingUpdates:
+                    del self.PendingUpdates[k]
+                self.Data[k] = v
+
     @synchronized
     def __setitem__(self, name, value):
         assert isinstance(value, (int, float, str, None))
@@ -82,7 +95,11 @@ class CDServer(Primitive):
                 return False
         else:
             return True
-        
+    
+    @synchronized
+    def waitForConfirmation(self, key, tmo=None)
+        while not self.confirmed(key):
+            self.sleep(tmo)
     
 
         
