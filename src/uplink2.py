@@ -93,9 +93,9 @@ class UpLink(PyThread):
                         eof = True
                             
     @synchronized
-    def waitForConnection(self):
+    def waitForConnection(self, tmo):
         while self.UpStream is None:
-            self.sleep()
+            self.sleep(tmo)
 
     @synchronized
     def send(self, transmission):

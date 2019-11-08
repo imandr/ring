@@ -108,9 +108,15 @@ class DownLink(PyThread):
         self.Node.downDisconnected()
         
     @synchronized
-    def waitForConnection(self):
+    def waitForConnection(self, tmo=None):
         while self.DownConnection is None:
-            self.sleep()
+            self.sleep(tmo)
+            
+    @property
+    @synchronized
+    def downLinkID(self):
+        return None if self.DownConnection is None else self.DownConnection.NodeID
+        
         
     def run(self):
         #print("DownLink started")

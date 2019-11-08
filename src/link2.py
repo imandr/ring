@@ -64,6 +64,10 @@ class EtherLink(Primitive):
         self.Map = []
         self.Poller = Poller(self)
         
+    @property
+    def downLinkID(self):
+        return self.DownLink.downLinkID
+        
     @staticmethod
     def flags(**args):
         return Transmission.flags(**args)
@@ -176,16 +180,39 @@ class EtherLink(Primitive):
         self.Map = lst[:]
         self.DiagonalLink.setDiagonals(self.Map[1:-1])  # remove up node and self
         
+    @synchronized
     def downConnected(self, node_id, addr):
-        pass
+        self.DownNodeID = node_id
+        self.DownNodeAddress = addr
+        self.wakeup()
+    
+    @synchronized
+    def waitForDownConnection(self, tmo=None):
+        while self.DownNodeID is None:
+            self.sleep(tmo)
+        retutn self.DownNodeID
 
+    @synchronized
     def downDisconnected(self):
-        pass
+        self.DownNodeID = self.DownNodeAddress = None
+        self.wakeup()
 
+    @synchronized
     def upConnected(self, node_id, addr):
-        pass
+        self.UpNodeID = node_id
+        self.UpNodeAddress = addr
+        self.wakeup()
         
+    @synchronized
     def upDisconnected(self):
-        pass
-        
+        self.UpNodeID = self.UpNodeAddress = None
+        self.wakeup()
+
+    @synchronized
+    def waitForUpConnection(self, tmo=None):
+        while self.UpNodeID is None:
+            self.sleep(tmo)
+        return self.UpNodeID
+
+
         
