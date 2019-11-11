@@ -22,20 +22,30 @@ class DownConnection(PyThread):
         #print("DownConnection.init...")
         stream = MessageStream(self.Sock)
         msg = stream.recv(tmo = 1.0)
+        #print("DownConnection.init(): received:", msg)
         if msg and msg.startswith("HELLO "):
             try:    
                 cmd, node_id, ip, port = msg.split(None, 3)
+                #print("DownConnection.init(): parsed:", cmd, node_id, ip, port)
                 self.NodeID = node_id
                 self.Address = (ip, int(port))
                 self.Stream = stream
+                #print("DownConnection.init(): calling manager.downConnected()...")
                 self.Manager.downConnected(self)
+                #print("DownConnection.init(): sending OK...")
                 stream.send("OK %s" % (self.Manager.nodeID()))
+                #print("DownConnection.init(): sent OK:")
+                #print("DownConnection.init(): initialized")
+                self.wakeup()
+                #print("DownConnection.init(): returning True")
                 return True
-            except:
-                #raise
+            except Exception as e:
+                raise
+                #print("DownConnection.init(): init failed:", e)
                 stream.close()
                 return False
         else:
+            #print("DownConnection.init(): init failed")
             stream.close()
             return False
             
@@ -61,7 +71,6 @@ class DownConnection(PyThread):
             if self.Stream is not None:
                 self.Stream.close()
                 self.Stream = None
-            self.Manager.downDisconnected(self)
         self.Manager = None
                 
 class DownLink(PyThread):
@@ -87,6 +96,7 @@ class DownLink(PyThread):
                 s.bind(addr)
                 #print("DownLink.bind: bound to:", addr)
             except Exception as e:
+                #print("can not bid to addr:", e)
                 pass
             else:
                 return i, s, s.getsockname()
@@ -101,16 +111,15 @@ class DownLink(PyThread):
         if self.DownConnection is not None:
             self.DownConnection.sendReconnect(connection.Address)
         self.DownConnection = connection
-        self.Node.downConnected(connection.NodeID, connection.Address)
+        self.wakeup()
 
-    @synchronized
-    def downDisconnected(self, connection):
-        self.Node.downDisconnected()
-        
     @synchronized
     def waitForConnection(self, tmo=None):
         while self.DownConnection is None:
+            #print("DownLink.waitForConnection(): sleep...")
             self.sleep(tmo)
+        #print("DownLink.waitForConnection(): exit")
+        return self.downLinkID
             
     @property
     @synchronized

@@ -1,6 +1,6 @@
 from pythreader import PyThread, Primitive, synchronized
 from socket import *
-import random, time, uuid
+import random, time, uuid, yaml
 from .transmission import Transmission
 from .uplink2 import UpLink
 from .downlink3 import DownLink
@@ -44,14 +44,24 @@ class Poller(PyThread):
             self.Link._send_system_poll()
             time.sleep(10.0+random.random())
         self.Link = None
+        
+def read_config(path_or_file):
+    if isinstance(path_or_file, str):
+        path_or_file = open(path_or_file, "r")
+    cfg = yaml.load(path_or_file, Loader=yaml.SafeLoader)
+    cfg["nodes"] = list(map(tuple, cfg["nodes"]))
+    #print("read_config: nodes:", cfg["nodes"])
+    return cfg
 
 class EtherLink(Primitive):
     
     Version = Version
     
-    def __init__(self, nodes, delegate = None):
+    def __init__(self, cfg, delegate = None):
         Primitive.__init__(self)
-        self.Delegate = None
+        config = read_config(cfg)
+        nodes = config["nodes"]
+        self.Delegate = delegate
         self.ID = uuid.uuid1().hex
         self.Seen = SeenMemory(10000)               # data: (seen, sent_edge, sent_diagonal)
         self.DownLink = DownLink(self, nodes)
@@ -89,22 +99,23 @@ class EtherLink(Primitive):
     def downLinkAddress(self):
         return self.DownLink.Address
 
+    @synchronized
     def _transmit(self, t):
         tid = t.TID
         self.Seen.set(tid, (False, True, False))
+        #print("_transmit: sending...")
         self.UpLink.send(t)
+        #print("_transmit: sent up: %s" % (t.TID,))
         if t.send_diagonal:
             self.Seen.set(tid, (False, True, True))
             self.DiagonalLink.send(t)
         return tid
 
-    @synchronized
     def send(self, payload, to, system=False, send_diagonal=True):
         assert to != Transmission.BROADCAST, "Use EtherLink.broadcast() to send broadcast messages"
         t = Transmission(self.ID, to, payload, send_diagonal = send_diagonal, system=system)
         return self._transmit(t)
 
-    @synchronized
     def broadcast(self, payload, fast=False, guaranteed=False, mutable=False, system=False):
         t = Transmission(self.ID, Transmission.BROADCAST, payload, 
             send_diagonal = fast, cross_to_edge = not guaranteed, mutable=mutable, system=system)
@@ -139,7 +150,7 @@ class EtherLink(Primitive):
                     t.Payload = ret
 
             if t.broadcast:
-                forward = (len(ret) > 0) and (t.Src != self.ID)
+                forward = (t.Src != self.ID)
             else:
                 forward = (t.Dst != self.ID)
             
@@ -184,43 +195,23 @@ class EtherLink(Primitive):
         self.Map = lst[:]
         self.DiagonalLink.setDiagonals(self.Map[1:-1])  # remove up node and self
         
-    @synchronized
     def downConnected(self, node_id, addr):
+        #print("EtherLink.downConnected():", node_id, addr)
         self.DownNodeID = node_id
         self.DownNodeAddress = addr
         if self.Delegate is not None and hasattr(self.Delegate, "downConnected"):
+            #print("EtherLink.downConnected():", delegate," calling delegate...")
             self.Delegate.downConnected(node_id, addr)
-        self.wakeup()
+        #print ("EtherLink.downConnected(): wakeup")
+        with self:
+            self.wakeup()
+        #print("EtherLink.downConnected(): exit")
     
-    @synchronized
     def waitForDownConnection(self, tmo=None):
-        while self.DownNodeID is None:
-            self.sleep(tmo)
-        retutn self.DownNodeID
+        return self.DownLink.waitForConnection(tmo)
 
-    @synchronized
-    def downDisconnected(self):
-        self.DownNodeID = self.DownNodeAddress = None
-        self.wakeup()
-
-    @synchronized
-    def upConnected(self, node_id, addr):
-        self.UpNodeID = node_id
-        self.UpNodeAddress = addr
-        if self.Delegate is not None and hasattr(self.Delegate, "upConnected"):
-            self.Delegate.upConnected(node_id, addr)
-        self.wakeup()
-        
-    @synchronized
-    def upDisconnected(self):
-        self.UpNodeID = self.UpNodeAddress = None
-        self.wakeup()
-
-    @synchronized
     def waitForUpConnection(self, tmo=None):
-        while self.UpNodeID is None:
-            self.sleep(tmo)
-        return self.UpNodeID
+        return self.UpLink.waitForConnection(tmo)
 
 
         

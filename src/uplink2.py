@@ -1,5 +1,5 @@
 from pythreader import PyThread, Primitive, synchronized
-from fcslib import MessageStream
+from fcslib import MessageStream, StreamTimeout
 from socket import *
 import random, select, sys, traceback
 
@@ -40,80 +40,87 @@ class UpLink(PyThread):
         if stream is not None:
             #print ("UpLink: connect_to: connected to:", ip, port)
             down_ip, down_port = self.Node.downLinkAddress()
-            #print("connect_to: sending HELLO")
-            ok = stream.sendAndRecv("HELLO %s %s %s" % (self.Node.ID, down_ip, down_port))
+            hello = "HELLO %s %s %s" % (self.Node.ID, down_ip, down_port)
+            #print("connect_to: sending", hello)
+            ok = stream.sendAndRecv(hello)
             #print("connect_to: response to HELLO:", ok)
             if ok and ok.startswith("OK "):
                 words = ok.split(None,1)
                 self.UpStream = stream
                 self.UpAddress = (ip, port)
                 self.UpNodeID = words[1]
-                self.Node.upConnected(self.UpNodeID, self.UpAddress)
                 self.wakeup()
                 return True
             else:
                 stream.close()
                 return False
         else:
+            #print("UpLink.connect_to(%s, %d): not connected" % (ip, port))
             return False
     
-    @synchronized
     def connect(self):
         #print("UpLink.connect()...")
         for ip, port in self.UpNodes:
             if self.connect_to(ip, port): 
                 #print("UpLink.connect: connected")
                 break
+        else:
+            return False
+        return True
 
     def run(self):
+        
+        self.connect()
         connect_to = None
         while True:
-
-            connected = False
+            connected = self.UpStream is not None       # in case it's already connected
+            while not connected:
             
-            if connect_to is not None: 
-                connected = self.connect_to(*connect_to)
-                connect_to = None
+                if connect_to is not None: 
+                    connected = self.connect_to(*connect_to)
+                    connect_to = None
                 
-            if not connected:
-                self.connect()
-                
-            self.Node.upConnected(self.UpNodeID, self.UpAddress)
-            
-            eof = False
-            while not eof:
-                #print("UpLink.run: readMore...")
+                if not connected:
+                    connected = self.connect()
+                    
+            while self.UpStream is not None:
                 self.UpStream.zing()
-                while not eof:
-                    msg = self.UpStream.recv()
-                    if msg is None:
-                        eof = True
-                    elif msg.startswith("RECONNECT "):
-                        cmd, ip, port = msg.split(None, 2)
-                        connect_to = (ip, int(port))
-                        eof = True
-                if eof or self.UpStream.eof():
-                    with self:      # why ?? 
-                        self.UpStream = None
-                        eof = True
+                eof = False
+                try:    msg = self.UpStream.recv(1.0)
+                except StreamTimeout:
+                    continue
+                if msg is None:
+                    eof = True
+                elif msg.startswith("RECONNECT "):
+                    cmd, ip, port = msg.split(None, 2)
+                    connect_to = (ip, int(port))
+                    eof = True
+                else:
+                    # ignore ??
+                    pass
+                if eof:
+                    self.UpStream.close()
+                    self.UpStream = None
                             
     @synchronized
-    def waitForConnection(self, tmo):
+    def waitForConnection(self, tmo=None):
         while self.UpStream is None:
+            #print("UpLink.waitForConnection(): waiting...")
             self.sleep(tmo)
+        return self.UpNodeID
 
-    @synchronized
     def send(self, transmission):
+        #print("UpLink.send()", transmission)
 
         tbytes = transmission.to_bytes()
         
         sent = False
         
         while not sent:
-            while self.UpStream is None:
-                #print("UpLink.send(): waiting for connection...")
-                self.waitForConnection()
+            self.waitForConnection()
             sent = self.UpStream.send(tbytes)
+        #print("UpLink.send(): done")
+        
                 
         
         

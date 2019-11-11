@@ -60,10 +60,9 @@ class Friends(PyThread):
 opts, args = getopt.getopt(sys.argv[1:], "c:n:")
 opts = dict(opts)
 name = opts.get("-n", "process#%d" % (os.getpid()))
+cfg = opts["-c"]
 
-nodes = yaml.load(open(opts["-c"], "r"), Loader=yaml.SafeLoader)["nodes"]
-nodes = [tuple(x) for x in nodes]
-link = EtherLink(nodes)
+link = EtherLink(cfg)
 network = Friends(link, name)
 link.init(network)
 network.start()

@@ -29,7 +29,7 @@ class CDServer(Primitive):
                     self.Synchronized = True
                     self.wakeup()
                 else:
-                    data = json.lods(data)
+                    data = json.loads(data)
                     self.Data.update(data)
                     
         elif cmd == "SYNCR" and t.Str == self.Ether.upID: # SYNC is always sent from immediate down connection to immediate up
@@ -43,7 +43,7 @@ class CDServer(Primitive):
             self.Ether.send("SYNC .", t.Src, send_diagonal=False)
             
         elif cmd == "UPDATE":
-            data = json.lods(rest)
+            data = json.loads(rest)
             self.Data.update(data)
             
         elif cmd == "LOCK":
