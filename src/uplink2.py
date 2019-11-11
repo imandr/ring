@@ -14,7 +14,11 @@ class UpLink(PyThread):
         self.UpStream = None
         self.UpNodeID = None
         self.UpAddress = None
+        self.Shutdown = False
         
+    def shutdown(self):
+        self.Shutdown = True
+
     @property
     def upLinkID(self):
         return self.UpNodeID
@@ -38,12 +42,12 @@ class UpLink(PyThread):
         #print ("UpLink.connect_to(%s, %d)..." % (ip, port))
         stream = self.connectStream(ip, port)
         if stream is not None:
-            #print ("UpLink: connect_to: connected to:", ip, port)
+            print ("UpLink: connect_to: connected to:", ip, port)
             down_ip, down_port = self.Node.downLinkAddress()
             hello = "HELLO %s %s %s" % (self.Node.ID, down_ip, down_port)
             #print("connect_to: sending", hello)
             ok = stream.sendAndRecv(hello)
-            #print("connect_to: response to HELLO:", ok)
+            print("connect_to: response to HELLO:", ok)
             if ok and ok.startswith("OK "):
                 words = ok.split(None,1)
                 self.UpStream = stream
@@ -72,9 +76,9 @@ class UpLink(PyThread):
         
         self.connect()
         connect_to = None
-        while True:
+        while not self.Shutdown:
             connected = self.UpStream is not None       # in case it's already connected
-            while not connected:
+            while not connected and not self.Shutdown:
             
                 if connect_to is not None: 
                     connected = self.connect_to(*connect_to)
@@ -83,11 +87,13 @@ class UpLink(PyThread):
                 if not connected:
                     connected = self.connect()
                     
-            while self.UpStream is not None:
+            while self.UpStream is not None and not self.Shutdown:
                 self.UpStream.zing()
                 eof = False
+                print("UpLink.run: recv...")
                 try:    msg = self.UpStream.recv(1.0)
                 except StreamTimeout:
+                    print("UpLink.run: timeout")
                     continue
                 if msg is None:
                     eof = True

@@ -9,7 +9,7 @@ class Friends(PyThread):
         self.Name = name
         self.Ether = ether
         
-    def initialized(self):
+    def initialized(self, node_id):
         #print ("Initialized")
         self.Ether.broadcast("HELLO %s" % (self.Name,))
         

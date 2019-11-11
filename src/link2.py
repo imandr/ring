@@ -52,6 +52,24 @@ def read_config(path_or_file):
     cfg["nodes"] = list(map(tuple, cfg["nodes"]))
     #print("read_config: nodes:", cfg["nodes"])
     return cfg
+    
+class EtherLinkDelegate(object):    # virtual base class for delegates
+    
+    def messageReceived(self, t):
+        pass
+        
+    def messageReturned(self, t):
+        pass
+        
+    def initialized(self):
+        pass
+        
+    def downConnected(self):
+        pass
+        
+    def upConnected(self):
+        pass
+        
 
 class EtherLink(Primitive):
     
@@ -93,8 +111,22 @@ class EtherLink(Primitive):
         self.UpLink.start()
         self.DiagonalLink.start()
         self.Poller.start()
-        if self.Delegate is not None:
-            self.Delegate.initialized()
+        if self.Delegate is not None and hasattr(self.Delegate, "initialized"):
+            self.Delegate.initialized(self.ID)
+        self.Initialized = True
+            
+    def run(self, delegate=None):
+        if not self.Initialized:
+            self.init(delegate)
+        self.DownLink.join()
+        
+    def shutdown(self):
+        self.UpLink.shutdown()
+        self.DownLink.shutdown()
+        print("EtherLink.shutdown: waiting for down link...")
+        self.DownLink.join()
+        print("EtherLink.shutdown: waiting for up link...")
+        self.UpLink.join()
         
     def downLinkAddress(self):
         return self.DownLink.Address
@@ -103,9 +135,9 @@ class EtherLink(Primitive):
     def _transmit(self, t):
         tid = t.TID
         self.Seen.set(tid, (False, True, False))
-        #print("_transmit: sending...")
+        print("_transmit: sending...")
         self.UpLink.send(t)
-        #print("_transmit: sent up: %s" % (t.TID,))
+        print("_transmit: sent up: %s" % (t,))
         if t.send_diagonal:
             self.Seen.set(tid, (False, True, True))
             self.DiagonalLink.send(t)
@@ -124,7 +156,7 @@ class EtherLink(Primitive):
     @synchronized
     def routeTransmission(self, t, from_diagonal):
         
-        #print("routeTransmission: from_diagonal=%s %s" % (from_diagonal, t))
+        print("routeTransmission: from_diagonal=%s %s" % (from_diagonal, t))
 
         tid = t.TID
         seen, sent_up, sent_diag = self.Seen.get(tid, (False, False, False))
@@ -212,6 +244,7 @@ class EtherLink(Primitive):
 
     def waitForUpConnection(self, tmo=None):
         return self.UpLink.waitForConnection(tmo)
+        
 
 
         
