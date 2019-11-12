@@ -71,6 +71,7 @@ class Subscriber(PubSubAgent, PyThread):
         print(f"published: [{topic}] {article}")
         
     def run(self):
+        self.Ether.init(self)
         self.Ether.run(self)
                 
 
