@@ -27,7 +27,7 @@ class PubSubAgent(EtherLinkDelegate):
     def messageReceived(self, t):
         msg = t.Payload
         cmd, rest = msg.split(None, 1)
-        print("PubSubAgent.messageReceived:", t)
+        #print("PubSubAgent.messageReceived:", t)
         if cmd == "ARTICLE":
             topic, article = rest.split(None, 1)
             if topic in self.SubscribedTopics:
@@ -36,35 +36,48 @@ class PubSubAgent(EtherLinkDelegate):
     def shutdown(self):
         self.Ether.shutdown()
                 
+class Publisher(PubSubAgent, PyThread):
+    
+    def __init__(self, ether, topics):
+        PyThread.__init__(self)
+        PubSubAgent.__init__(self, ether)
+        self.Topics = topics
+        self.Words = None
+        try:
+            with open("/usr/share/dict/words", "r") as words:
+                self.Words = [w.strip() for w in words]
+        except:
+            pass            
+    
+    def run(self):
+        self.Ether.init(self)
+        while True:
+            topic = random.choice(self.Topics)
+            if self.Words:
+                article = " ".join(random.sample(self.Words, 3))
+            else:
+                article = time.ctime(time.time())
+            print(f"publish: [{topic}] {article}")
+            self.publish(topic, article)
+            time.sleep(1.0+random.random()*10.0)
+
+class Subscriber(PubSubAgent, PyThread):
+    
+    def __init__(self, ether, topics):
+        PyThread.__init__(self)
+        PubSubAgent.__init__(self, ether, topics)
+    
+    def published(self, topic, article):
+        print(f"published: [{topic}] {article}")
+        
+    def run(self):
+        self.Ether.run(self)
+                
+
+
 if __name__ == '__main__':
     import sys, getopt, random
-    
-    class Publisher(PubSubAgent, PyThread):
         
-        def __init__(self, ether, topics):
-            PyThread.__init__(self)
-            PubSubAgent.__init__(self, ether)
-            self.Topics = topics
-        
-        def run(self):
-            while True:
-                topic = random.choice(self.Topics)
-                self.publish(topic, time.ctime(time.time()))
-                time.sleep(1.0+random()*10.0)
-
-    class Subscriber(PubSubAgent, PyThread):
-        
-        def __init__(self, ether, topics):
-            PyThread.__init__(self)
-            PubSubAgent.__init__(self, ether, topics)
-        
-        def published(self, topic, article):
-            print("Published:", topic)
-            print(article)
-            
-        def run(self):
-            self.Ether.run()
-                
     opts, args = getopt.getopt(sys.argv[1:], "c:")
     opts = dict(opts)
     if len(args) < 2 or not "-c" in opts:

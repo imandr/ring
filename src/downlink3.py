@@ -1,5 +1,5 @@
 from pythreader import PyThread, Primitive, synchronized
-from fcslib import MessageStream
+from fcslib import MessageStream, StreamTimeout
 from socket import *
 import random, select
 from .transmission import Transmission
@@ -26,7 +26,7 @@ class DownConnection(PyThread):
         if msg and msg.startswith("HELLO "):
             try:    
                 cmd, node_id, ip, port = msg.split(None, 3)
-                print("DownConnection.init(): parsed:", cmd, node_id, ip, port)
+                #print("DownConnection.init(): parsed:", cmd, node_id, ip, port)
                 self.NodeID = node_id
                 self.Address = (ip, int(port))
                 self.Stream = stream
@@ -34,18 +34,18 @@ class DownConnection(PyThread):
                 self.Manager.downConnected(self)
                 #print("DownConnection.init(): sending OK...")
                 stream.send("OK %s" % (self.Manager.nodeID()))
-                print("DownConnection.init(): sent OK:")
+                #print("DownConnection.init(): sent OK:")
                 #print("DownConnection.init(): initialized")
                 self.wakeup()
                 #print("DownConnection.init(): returning True")
                 return True
             except Exception as e:
                 raise
-                print("DownConnection.init(): init failed:", e)
+                #print("DownConnection.init(): init failed:", e)
                 stream.close()
                 return False
         else:
-            print("DownConnection.init(): init failed")
+            #print("DownConnection.init(): init failed")
             stream.close()
             return False
     
@@ -63,12 +63,13 @@ class DownConnection(PyThread):
         if self.init():
             #print("DownConnection: initialized")
             while not self.Shutdown and self.Stream is not None:
-                print("DownConnection.run: loop")
+                #print("DownConnection.run: loop")
                 if self.Stream is not None:
-                    print("DownConnection: recv()...")
+                    #print("DownConnection: recv()...")
                     try:    msg = self.Stream.recv(1.0)
                     except StreamTimeout:
-                        print("DownConnection.run: timeout")
+                        #print("DownConnection.run: timeout")
+                        self.Stream.zing()
                         continue
                     if msg: 
                         t = Transmission.from_bytes(msg)
@@ -125,6 +126,7 @@ class DownLink(PyThread):
         if self.DownConnection is not None:
             self.DownConnection.sendReconnect(connection.Address)
         self.DownConnection = connection
+        self.Node.downConnected(connection.NodeID, connection.Address)
         self.wakeup()
 
     @synchronized
@@ -149,6 +151,7 @@ class DownLink(PyThread):
             #print("DownLink: accept()...")
             try:    sock, addr = self.ListenSock.accept()
             except timeout:
+                #print("DownLink: accept() timeout")
                 continue
             #print("DownLink: accepted:", addr)
             if not self.Shutdown:

@@ -61,13 +61,13 @@ class EtherLinkDelegate(object):    # virtual base class for delegates
     def messageReturned(self, t):
         pass
         
-    def initialized(self):
+    def initialized(self, node_id):
         pass
         
-    def downConnected(self):
+    def downConnected(self, node_id, addr):
         pass
         
-    def upConnected(self):
+    def upConnected(self, node_id, addr):
         pass
         
 
@@ -91,6 +91,7 @@ class EtherLink(Primitive):
         self.DiagonalLink = DiagonalLink(self, self.DownLink.Address)
         self.Map = []
         self.Poller = Poller(self)
+        self.Initialized = False
         
     @property
     def downID(self):
@@ -123,9 +124,9 @@ class EtherLink(Primitive):
     def shutdown(self):
         self.UpLink.shutdown()
         self.DownLink.shutdown()
-        print("EtherLink.shutdown: waiting for down link...")
+        #print("EtherLink.shutdown: waiting for down link...")
         self.DownLink.join()
-        print("EtherLink.shutdown: waiting for up link...")
+        #print("EtherLink.shutdown: waiting for up link...")
         self.UpLink.join()
         
     def downLinkAddress(self):
@@ -135,9 +136,9 @@ class EtherLink(Primitive):
     def _transmit(self, t):
         tid = t.TID
         self.Seen.set(tid, (False, True, False))
-        print("_transmit: sending...")
+        #print("_transmit: sending...")
         self.UpLink.send(t)
-        print("_transmit: sent up: %s" % (t,))
+        #print("_transmit: sent up: %s" % (t,))
         if t.send_diagonal:
             self.Seen.set(tid, (False, True, True))
             self.DiagonalLink.send(t)
@@ -156,7 +157,7 @@ class EtherLink(Primitive):
     @synchronized
     def routeTransmission(self, t, from_diagonal):
         
-        print("routeTransmission: from_diagonal=%s %s" % (from_diagonal, t))
+        #print("routeTransmission: from_diagonal=%s %s" % (from_diagonal, t))
 
         tid = t.TID
         seen, sent_up, sent_diag = self.Seen.get(tid, (False, False, False))
@@ -234,10 +235,14 @@ class EtherLink(Primitive):
         if self.Delegate is not None and hasattr(self.Delegate, "downConnected"):
             #print("EtherLink.downConnected():", delegate," calling delegate...")
             self.Delegate.downConnected(node_id, addr)
-        #print ("EtherLink.downConnected(): wakeup")
-        with self:
-            self.wakeup()
-        #print("EtherLink.downConnected(): exit")
+    
+    def upConnected(self, node_id, addr):
+        #print("EtherLink.downConnected():", node_id, addr)
+        self.UpNodeID = node_id
+        self.UpNodeAddress = addr
+        if self.Delegate is not None and hasattr(self.Delegate, "upConnected"):
+            #print("EtherLink.downConnected():", delegate," calling delegate...")
+            self.Delegate.upConnected(node_id, addr)
     
     def waitForDownConnection(self, tmo=None):
         return self.DownLink.waitForConnection(tmo)

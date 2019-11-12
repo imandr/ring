@@ -42,17 +42,18 @@ class UpLink(PyThread):
         #print ("UpLink.connect_to(%s, %d)..." % (ip, port))
         stream = self.connectStream(ip, port)
         if stream is not None:
-            print ("UpLink: connect_to: connected to:", ip, port)
+            #print ("UpLink: connect_to: connected to:", ip, port)
             down_ip, down_port = self.Node.downLinkAddress()
             hello = "HELLO %s %s %s" % (self.Node.ID, down_ip, down_port)
             #print("connect_to: sending", hello)
             ok = stream.sendAndRecv(hello)
-            print("connect_to: response to HELLO:", ok)
+            #print("connect_to: response to HELLO:", ok)
             if ok and ok.startswith("OK "):
                 words = ok.split(None,1)
                 self.UpStream = stream
                 self.UpAddress = (ip, port)
                 self.UpNodeID = words[1]
+                self.Node.upConnected(self.UpNodeID, self.UpAddress)
                 self.wakeup()
                 return True
             else:
@@ -73,6 +74,7 @@ class UpLink(PyThread):
         return True
 
     def run(self):
+        #print ("UpLink.run...")
         
         self.connect()
         connect_to = None
@@ -88,12 +90,12 @@ class UpLink(PyThread):
                     connected = self.connect()
                     
             while self.UpStream is not None and not self.Shutdown:
-                self.UpStream.zing()
                 eof = False
-                print("UpLink.run: recv...")
+                #print("UpLink.run: recv...")
                 try:    msg = self.UpStream.recv(1.0)
                 except StreamTimeout:
-                    print("UpLink.run: timeout")
+                    #print("UpLink.run: timeout")
+                    self.UpStream.zing()
                     continue
                 if msg is None:
                     eof = True
@@ -123,8 +125,10 @@ class UpLink(PyThread):
         sent = False
         
         while not sent:
+            #print("UpLink.send: waiting for connection...")
             self.waitForConnection()
             sent = self.UpStream.send(tbytes)
+            #print("UpLink.send: sent:", sent)
         #print("UpLink.send(): done")
         
                 
