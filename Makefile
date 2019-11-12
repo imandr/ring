@@ -7,9 +7,7 @@ all:	clean build tarfile
 	
 build:	$(DSTROOT)
 	cd src; make DSTROOT=$(DSTROOT) VERSION=$(VERSION) build
-	cd test; make DSTROOT=$(DSTROOT) build
-	cd cdict; make DSTROOT=$(DSTROOT) build
-	cd pubsub; make DSTROOT=$(DSTROOT) build
+	cd samples; make DSTROOT=$(DSTROOT) build
 	
 tarfile: $(TARDIR)
 	cd $(DSTROOT); tar cf $(TARFILE) *
