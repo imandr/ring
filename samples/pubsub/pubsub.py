@@ -51,6 +51,7 @@ class Publisher(PubSubAgent, PyThread):
     
     def run(self):
         self.Ether.init(self)
+        self.Ether.start()
         while True:
             topic = random.choice(self.Topics)
             if self.Words:
@@ -72,7 +73,7 @@ class Subscriber(PubSubAgent, PyThread):
         
     def run(self):
         self.Ether.init(self)
-        self.Ether.run(self)
+        self.Ether.start()
                 
 
 

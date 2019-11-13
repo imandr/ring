@@ -135,7 +135,7 @@ class DownLink(PyThread):
             #print("DownLink.waitForConnection(): sleep...")
             self.sleep(tmo)
         #print("DownLink.waitForConnection(): exit")
-        return self.downLinkID
+        return self.downLinkID, self.DownNodeAddress
             
     @property
     @synchronized

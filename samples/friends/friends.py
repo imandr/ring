@@ -1,8 +1,8 @@
-from ring import EtherLink, to_str, to_bytes
+from ring import EtherLink, to_str, to_bytes, EtherLinkDelegate
 import yaml, sys, getopt, time, random, os
 from pythreader import PyThread
 
-class Friends(PyThread):
+class Friends(PyThread, EtherLinkDelegate):
     
     def __init__(self, ether, name="unknown"):
         PyThread.__init__(self)
@@ -23,15 +23,15 @@ class Friends(PyThread):
             
     def poll(self):
         print (">> poll")
-        self.Ether.broadcast("POLL %s" % (self.Name,), guaranteed=True, fast=False, mutable=True)
-        
-    def messageReturned(self, t):
-        msg = to_str(t.Payload)
-        if msg.startswith("POLL "):
+        t = self.Ether.poll("POLL %s" % (self.Name,), confirmation=True, timeout=1.0).result()
+        if t is not None:
+            msg = to_str(t.Payload)
             words = msg.split(" ",1)
             nodes = words[1].split(",")
             print ("<<       online:", ", ".join(nodes))
-
+        else:
+            print ("<<       [poll lost]")
+            
     def twit(self):
         msg = time.ctime(time.time())
         print (">> twit", msg)
@@ -65,5 +65,6 @@ cfg = opts["-c"]
 link = EtherLink(cfg)
 network = Friends(link, name)
 link.init(network)
+link.start()
 network.start()
 network.join()

@@ -27,7 +27,7 @@ class Transmission(object):
 
     def __init__(self, source_id, dest_id, payload, flags=None, **args):
         t = time.time()
-        self.TID = "%s.%d.%d" % (source_id, int(t), int((t-int(t))*1000000))
+        self.TID = "%s.%.6f" % (source_id, t)
         self.Src = source_id
         self.Dst = self.BROADCAST if dest_id is None else dest_id 
         if flags is None:
