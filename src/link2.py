@@ -1,4 +1,4 @@
-from pythreader import PyThread, Primitive, synchronized, Future
+from pythreader import PyThread, Primitive, synchronized, Promise
 from socket import *
 import random, time, uuid, yaml
 from .transmission import Transmission
@@ -7,6 +7,8 @@ from .downlink3 import DownLink
 from .diaglink import DiagonalLink
 
 from .version import Version
+from .py3 import to_str, to_bytes
+
 
 class EtherTimeout(Exception):
     pass
@@ -41,7 +43,11 @@ def read_config(path_or_file):
     if isinstance(path_or_file, str):
         path_or_file = open(path_or_file, "r")
     cfg = yaml.load(path_or_file, Loader=yaml.SafeLoader)
-    cfg["nodes"] = list(map(tuple, cfg["nodes"]))
+    cfg["seed_nodes"] = [
+        (ip, int(port)) 
+        for ip, port in 
+            [a.split(":", 1) for a in cfg["nodes"]]
+    ]
     #print("read_config: nodes:", cfg["nodes"])
     return cfg
     
@@ -61,6 +67,48 @@ class EtherLinkDelegate(object):    # virtual base class for delegates
         
     def upConnected(self, node_id, addr):
         pass
+        
+class EtherLinkMessage(object):
+    
+    def __init__(self, msg_type, *parts):
+        self.MessageType = msg_type
+        self.Parts = list(parts)
+        
+    def append(self, part):
+        self.Parts.append(part)
+        
+    def encode(self):
+        words = [self.MessageType]
+        for p in self.Parts:
+            p = str(p)
+            assert " " not in p
+            words.append(p)
+        return to_bytes(" ".join(words))
+    
+    @staticmethod
+    def decode(data):
+        words = data.split(None)
+        msg_type, parts = to_str(words[0]), [to_str(p) for p in words[1:]]
+        return EtherLinkMessage(msg_type, *parts)
+        
+    @staticmethod
+    def from_transmission(t):
+        msg = EtherLinkMessage.decode(t.Payload)
+        return msg
+        
+    def __getitem__(self, i):
+        return self.Parts[i]
+        
+    def __len__(self):
+        return self.MessageType
+        
+    @property
+    def type(self):
+        return self.MessageType
+
+    @property
+    def parts(self):
+        return self.Parts
 
 class EtherLink(PyThread):
     
@@ -69,21 +117,38 @@ class EtherLink(PyThread):
     def __init__(self, cfg, delegate = None):
         PyThread.__init__(self)
         config = read_config(cfg)
-        nodes = config["nodes"]
         self.Delegate = delegate
-        self.ID = uuid.uuid1().hex
+        self.ID = uuid.uuid4().hex[:8]
         self.Seen = SeenMemory(10000)               # data: (seen, sent_edge, sent_diagonal)
-        self.DownLink = DownLink(self, nodes)
+        seed_nodes = config["seed_nodes"]
+        self.DownLink = DownLink(self, seed_nodes)
         inx = self.DownLink.Index
-        up_nodes = nodes
         if inx is not None:
-            up_nodes = nodes[inx+1:] + nodes[:inx+1]
-        self.UpLink = UpLink(self, up_nodes)
+            seed_nodes = seed_nodes[inx+1:] + seed_nodes[:inx+1]
+        self.SeedNodes = seed_nodes
+        self.UpLink = UpLink(self, seed_nodes)
         self.DiagonalLink = DiagonalLink(self, self.DownLink.Address)
         self.Map = []
         self.Initialized = False
         self.Futures = {}               # tid -> (future, exp_time)
         self.Shutdown = False
+        self.DiagonalCheckInterval = 60.0
+        self.NextDiagonalCheck = time.time() + self.DiagonalCheckInterval
+        self.Debug = True
+        
+    def __str__(self):
+        return f"EtherLink({self.ID} @{self.address})"
+        
+    def debug(self, *parts):
+        if self.Debug:
+            print(f"EtherLink {self.ID}:", *parts)
+        
+    def downLinkAddress(self):
+        return self.DownLink.Address
+
+    @property
+    def address(self):
+        return self.DownLink.Address if self.DownLink is not None else None
         
     @property
     def downID(self):
@@ -103,15 +168,20 @@ class EtherLink(PyThread):
         self.DownLink.start()
         self.UpLink.start()
         self.DiagonalLink.start()
+        self.requestDiagonals()
         if self.Delegate is not None and hasattr(self.Delegate, "initialized"):
             self.Delegate.initialized(self.ID)
         self.Initialized = True
+        self.debug(f"initialized at {self.address}")
             
     def run(self):
         while not self.Shutdown:
             self._purge_futures()
-            self._system_poll()
-            self.sleep(5.0)
+            if time.time() > self.NextDiagonalCheck:
+                self.NextDiagonalCheck += self.DiagonalCheckInterval - 0.5 + random.random()
+                #self.DiagonalLink.checkDiagonals()
+                self.requestDiagonals()
+            self.sleep(15.0)
             
     def shutdown(self):
         self.UpLink.shutdown()
@@ -121,19 +191,21 @@ class EtherLink(PyThread):
         #print("EtherLink.shutdown: waiting for up link...")
         self.UpLink.join()
         
-    def downLinkAddress(self):
-        return self.DownLink.Address
-
     @synchronized
     def _transmit(self, t):
         tid = t.TID
-        self.Seen.set(tid, (False, True, False))
         #print("_transmit: sending...")
-        self.UpLink.send(t)
-        #print("_transmit: sent up: %s" % (t,))
-        if t.send_diagonal:
-            self.Seen.set(tid, (False, True, True))
-            self.DiagonalLink.send(t)
+        sent_edge, sent_diagonal = False, False
+        if t.decrement_hops():
+            if t.decrement_edge_hops():
+                self.UpLink.send(t)
+                sent_edge = True
+            #print("_transmit: sent up: %s" % (t,))
+            if t.send_diagonal and t.decrement_diagonal_hops():
+                self.DiagonalLink.send(t)
+                sent_diagonal = True
+        #print("_transmit:", sent_edge, sent_diagonal)
+        self.Seen.set(tid, (False, sent_edge, sent_diagonal))
         return tid
 
     def send(self, payload, to, system=False, send_diagonal=True):
@@ -142,14 +214,16 @@ class EtherLink(PyThread):
         return self._transmit(t)
 
     def broadcast(self, payload, confirmation=False, timeout = None, fast=True, 
+                                max_hops = None, max_edge_hops = None, max_diagonal_hops = None,
                                 guaranteed=False, system=False, mutable=False):
         guaranteed = guaranteed or confirmation
         t = Transmission(self.ID, Transmission.BROADCAST, payload, 
+            max_hops = max_hops, max_edge_hops = max_edge_hops, max_diagonal_hops = max_diagonal_hops,
             send_diagonal = fast, cross_to_edge = not guaranteed, mutable=mutable, system=system)
         tid = self._transmit(t)
         ret = t
         if confirmation:
-            future = Future(tid)
+            future = Promise(tid)
             self.Futures[tid] = (None if timeout is None else time.time() + timeout, future)
             ret = future
         return ret
@@ -157,95 +231,144 @@ class EtherLink(PyThread):
     def poll(self, payload, confirmation=False, timeout = None, system=False):
         return self.broadcast(payload, fast=False, confirmation=confirmation, guaranteed=True, 
                     mutable=True, system=system, timeout=timeout)
+                    
+    def message_received(self, t):
+        if t.system:
+            ret = self._system_message_received(t)
+        else:
+            if self.Delegate is not None:
+                ret = self.Delegate.messageReceived(t)
+                
+    def broadcast_received(self, t):
+        if t.system:
+            self._system_message_received(t)
+        elif self.Delegate is not None:
+            self.Delegate.messageReceived(t)
+        
+    def mutable_broadcast_received(self, t):
+        if t.system:
+            payload = self._system_message_received(t)
+        elif self.Delegate is not None:
+            payload = self.Delegate.messageReceived(t)
+        else:
+            payload = None
+        return payload
+        
+    def broadcast_returned(self, t):
+        tid = t.TID
+        if tid in self.Futures:
+            _, future = self.Futures.pop(tid)
+            future.complete(t)
+        elif t.system:
+            self._system_broadcast_returned(t)
+        elif self.Delegate is not None:
+            self.Delegate.messageReturned(t)
 
     @synchronized
     def routeTransmission(self, t, from_diagonal):
+        print(f"{self}: route transmission:", t)
         
-        #print("routeTransmission: from_diagonal=%s %s" % (from_diagonal, t))
-
         tid = t.TID
-        seen, sent_up, sent_diag = self.Seen.get(tid, (False, False, False))
+        seen, sent_edge, sent_diag = self.Seen.get(tid, (False, False, False))
+        #print("EtherLink.routeTransmission: link:", id(self), "   tid:", tid, "   seen:", seen)
         
-        forward = True
+        new_payload = None
         
         if not seen:
+            # this message is new. Process it
             if t.broadcast:
-                ret = None
-                if t.Src == self.ID and not from_diagonal and not (t.send_diagonal and t.cross_to_edge):
-                    # returned brtoadcast, received from diagonal and is guaranteed
-                    if tid in self.Futures:
-                        _, future = self.Futures.pop(tid)
-                        future.complete(t)
-                    elif t.system:
-                        self._system_broadcast_returned(t)
-                    else:
-                        if self.Delegate is not None:
-                            self.Delegate.messageReturned(t)
+                if t.Src == self.ID and from_diagonal:
+                    self.broadcast_returned(t)
+                elif t.mutable and not from_diagonal:
+                    new_payload = self.mutable_broadcast_received(t)
                 else:
-                    # received broadcast
-                    if t.system:
-                        ret = self._system_message_received(t)
-                    else:
-                        if self.Delegate is not None:
-                            ret = self.Delegate.messageReceived(t)
-
-                    if ret is not None and t.mutable:
-                        t.Payload = ret
-            else:
-                # direct message
-                if t.Dst == self.ID:
-                    if t.system:
-                        self._system_message_received(t)
-                    else:
-                        if self.Delegate is not None:
-                            self.Delegate.messageReceived(t)
-
-        forward = forward and (
-                (t.broadcast and t.Src != self.ID) or 
-                ((not t.broadcast) and t.Dst != self.ID)
-        )
-                
-        if forward:
-            if not sent_up and t.send_edge and (not from_diagonal or t.cross_to_diagonal):
-                sent_up = True
-                self.UpLink.send(t)
+                    self.broadcast_received(t)                    
+            elif t.Dst == self.ID:
+                self.message_received(t)
+            seen = True
             
-            if not sent_diag and t.send_diagonal and (from_diagonal or t.cross_to_diagonal):
-                sent_diag = True
-                self.DiagonalLink.send(t)
-                
-        self.Seen.set(tid, (seen, sent_up, sent_diag))
+        forward = (
+                    t.broadcast and t.Src != self.ID 
+                    or 
+                    (not t.broadcast) and t.Dst != self.ID
+                )
         
-    def _system_poll(self):
-        ip, port = self.DownLink.Address
-        t = self.poll(".POLL %s:%s:%d" % (self.ID, ip, port), system=True, confirmation=True, timeout=5.0) \
-            .result()
-        if t is not None:
-            # poll did return
-            payload = t.Payload
-            words = payload.split()
-            cmd = words[0]
-            args = words[1:]
-            assert cmd == ".POLL"
-            assert t.Src == self.ID
-            lst = [arg.split(':',2) for arg in args]
-            lst = [(node_id, (ip, int(port))) for node_id, ip, port in lst]
-            self.Map = lst[:]
-            self.DiagonalLink.setDiagonals(self.Map[1:-1])  # remove immediate up node and self
+        if forward and t.decrement_hops():
+
+            if new_payload is not None:
+                t.set_payload(new_payload)
+
+            if not sent_edge and t.send_edge and (not from_diagonal or t.cross_to_diagonal):
+                if t.decrement_edge_hops():
+                    sent_edge = True
+                    self.UpLink.send(t)
+        
+            if not sent_diag and t.send_diagonal and (from_diagonal or t.cross_to_diagonal):
+                if t.decrement_diagonal_hops():
+                    sent_diag = True
+                    self.DiagonalLink.send(t)
+            
+        self.Seen.set(tid, (True, sent_edge, sent_diag))
+        
+    def pollForDiagonals(self):
+        self.sendConnectivityPoll()
+
+    def requestDiagonals(self):
+        print(f"{self}: requesting diagonals")
+        diag_ip, diag_port = self.DiagonalLink.address
+        self.broadcast("DREQ %s %d" % (diag_ip, diag_port), system=True, max_diagonal_hops=5, max_edge_hops=5)
+
+    def sendConnectivityPoll(self):
+        ip, port = self.address
+        self.poll("POLL %s:%s:%d" % (self.ID, ip, port), system=True)
 
     def _system_message_received(self, t):
-        #print("_system_broadcast_received:",t.Flags,t.Payload)
+        print(f"{self}: _system_message_received:",t)
         payload = t.Payload
-        if payload.startswith(".POLL"):
+        msg = EtherLinkMessage.from_transmission(t)
+        print("    msg.type=", msg.type)
+        if msg.type == "POLL":
             # system poll
-            words = payload.split()
-            args = words[1:]
-            down_ip, down_port = self.downLinkAddress()
-            payload += " %s:%s:%d" % (self.ID, down_ip, down_port)
-            return payload
+            lst = msg.parts
+            ip, port = self.address
+            msg.append("%s:%s:%d" % (self.ID, ip, port))
+            return msg.encode()
+        elif msg.type == "DCON":
+            node_id, ip, port = msg.parts
+            addr = (ip, int(port))
+            if self.DiagonalLink.is_diagonal_link(addr):
+                self.pollForDiagonals()
+        elif msg.type == "DREQ":
+            if t.Src != self.DownLink.downLinkID and t.Src != self.UpLink.upLinkID:
+                print(f"{self}: received diagonal request from {t.Src}. my down link:{self.DownLink.downLinkID}, up link:{self.UpLink.upLinkID}")
+                if random.random() < 1.0:
+                    ip, port = msg.parts
+                    port = int(port)
+                    print("       replying to:", ip, port)
+                    response = EtherLinkMessage("DREP", *self.DiagonalLink.address).encode()
+                    self.send(response, t.Src, system=True)
+        elif msg.type == "DREP":
+            ip, port = msg.parts
+            src = t.Src
+            print(f"{self}: received diagonal reply from {src} with address: {ip}:{port}")
+            self.DiagonalLink.addDiagonal(src, ip, int(port))
         
     def _system_broadcast_returned(self, t):
-        pass        # not used for now
+        assert t.Src == self.ID
+        payload = t.Payload
+        msg = EtherLinkMessage.from_transmission(t)
+        if msg.type == "POLL":
+            lst = [arg.split(':',2) for arg in msg.parts]
+            lst = [(node_id, (ip, int(port))) for node_id, ip, port in lst]
+            if self.Debug:
+                print("Connectivity map:")
+                for node_id, (ip, port) in lst:
+                    print(f"  {node_id}@{ip}:{port}", "(self)" if node_id == self.ID else "")
+            self.Map = lst
+            self.DiagonalLink.setDiagonals([addr for node_id, addr in self.Map[1:-1]])  # remove immediate up node and self
+            
+    def upNodes(self):
+        return self.Map[1:]     # last known up chain
             
     @synchronized
     def _purge_futures(self):
@@ -258,7 +381,6 @@ class EtherLink(PyThread):
                 new_dict[tid] = (t, future)
         self.Futures = new_dict
 
-        
     def downConnected(self, node_id, addr):
         #print("EtherLink.downConnected():", node_id, addr)
         self.DownNodeID = node_id
@@ -266,7 +388,12 @@ class EtherLink(PyThread):
         if self.Delegate is not None and hasattr(self.Delegate, "downConnected"):
             #print("EtherLink.downConnected():", delegate," calling delegate...")
             self.Delegate.downConnected(node_id, addr)
-    
+            
+    def downDisconnected(self, node_id, addr):
+        ip, port = addr
+        payload = "DCON %s %s %d" % (node_id, ip, port)
+        self.broadcast(payload, system=True)
+
     def upConnected(self, node_id, addr):
         #print("EtherLink.downConnected():", node_id, addr)
         self.UpNodeID = node_id

@@ -1,7 +1,7 @@
 from pythreader import PyThread, Primitive, synchronized
-from fcslib import MessageStream, StreamTimeout
+from .message_stream import MessageStream, StreamTimeout
 from socket import *
-import random, select
+import random, select, sys
 from .transmission import Transmission
 
 from .py3 import to_str, to_bytes
@@ -20,11 +20,12 @@ class DownConnection(PyThread):
     @synchronized
     def init(self):
         #print("DownConnection.init...")
-        stream = MessageStream(self.Sock)
+        stream = MessageStream(self.Sock, name="downlink")
         msg = stream.recv(tmo = 1.0)
         #print("DownConnection.init(): received:", msg)
-        if msg and msg.startswith("HELLO "):
+        if msg and msg.startswith(b"HELLO "):
             try:    
+                msg = to_str(msg)
                 cmd, node_id, ip, port = msg.split(None, 3)
                 #print("DownConnection.init(): parsed:", cmd, node_id, ip, port)
                 self.NodeID = node_id
@@ -33,15 +34,15 @@ class DownConnection(PyThread):
                 #print("DownConnection.init(): calling manager.downConnected()...")
                 self.Manager.downConnected(self)
                 #print("DownConnection.init(): sending OK...")
-                stream.send("OK %s" % (self.Manager.nodeID()))
+                stream.send("OK %s" % (self.Manager.nodeID))
                 #print("DownConnection.init(): sent OK:")
                 #print("DownConnection.init(): initialized")
                 self.wakeup()
                 #print("DownConnection.init(): returning True")
                 return True
             except Exception as e:
-                raise
                 #print("DownConnection.init(): init failed:", e)
+                raise
                 stream.close()
                 return False
         else:
@@ -55,6 +56,7 @@ class DownConnection(PyThread):
     @synchronized
     def sendReconnect(self, addr):
         if self.Stream is not None:
+            #print("DownConnection: sendReconnect to ", addr)
             self.Stream.send("RECONNECT %s %d" % addr)
         self.Shutdown = True
         
@@ -65,30 +67,30 @@ class DownConnection(PyThread):
             while not self.Shutdown and self.Stream is not None:
                 #print("DownConnection.run: loop")
                 if self.Stream is not None:
-                    #print("DownConnection: recv()...")
-                    try:    msg = self.Stream.recv(1.0)
-                    except StreamTimeout:
-                        #print("DownConnection.run: timeout")
-                        self.Stream.zing()
-                        continue
+                    #print(f"DownConnection: {self.Stream}.recv()...")
+                    msg = self.Stream.recv()
                     if msg: 
                         t = Transmission.from_bytes(msg)
+                        #print("DownConnection: transmission redecived:", t)
                         self.Manager.transmissionReceived(t)
                     else:
+                        #print("DownConnection.run: empty msg:", msg)
                         break
             if self.Stream is not None:
+                #print("DownConnection.run: closing stream")
                 self.Stream.close()
                 self.Stream = None
+        self.Manager.downDisconnected(self)
         self.Manager = None
                 
 class DownLink(PyThread):
 
-    def __init__(self, node, nodes):
+    def __init__(self, node, seed_nodes):
         PyThread.__init__(self)
         self.Node = node
         self.ListenSock = None
         self.DownConnection = None
-        self.Index, self.ListenSock, self.Address = self.bind(nodes)
+        self.Index, self.ListenSock, self.Address = self.bind(seed_nodes)
         self.ListenSock.listen()
         self.DownNodeAddress = None
         self.Shutdown = False
@@ -99,9 +101,6 @@ class DownLink(PyThread):
         if self.DownConnection != None:
             self.DownConnection.shutdown()
 
-    def nodeID(self):
-        return self.Node.ID
-        
     def bind(self, addresses):
         for i, addr in enumerate(addresses):
             try:
@@ -123,11 +122,17 @@ class DownLink(PyThread):
             
     @synchronized
     def downConnected(self, connection):
+        #print("DownLink: down connected:", connection.NodeID)
         if self.DownConnection is not None:
             self.DownConnection.sendReconnect(connection.Address)
         self.DownConnection = connection
         self.Node.downConnected(connection.NodeID, connection.Address)
         self.wakeup()
+        
+    def downDisconnected(self, connection):
+        if connection is self.DownConnection:
+            #print("DownLink: down disconnected", connection.NodeID)
+            self.Node.downDisconnected(connection.NodeID, connection.Address)
 
     @synchronized
     def waitForConnection(self, tmo=None):
@@ -136,12 +141,15 @@ class DownLink(PyThread):
             self.sleep(tmo)
         #print("DownLink.waitForConnection(): exit")
         return self.downLinkID, self.DownNodeAddress
-            
+    
+    @property
+    def nodeID(self):
+        return self.Node.ID
+    
     @property
     @synchronized
     def downLinkID(self):
         return None if self.DownConnection is None else self.DownConnection.NodeID
-        
         
     def run(self):
         #print("DownLink started")
@@ -153,7 +161,7 @@ class DownLink(PyThread):
             except timeout:
                 #print("DownLink: accept() timeout")
                 continue
-            #print("DownLink: accepted:", addr)
+            #print("DownLink: accepted connection from", addr)
             if not self.Shutdown:
                 down_connection = DownConnection(self, sock)
                 down_connection.start()
@@ -162,4 +170,7 @@ class DownLink(PyThread):
             self.DownConnection = None
                                 
     def transmissionReceived(self, t):
+        #print("DownLink: transmissionReceived:", t)
         self.Node.routeTransmission(t, False)
+        #print("         return from transmissionReceived:", t.TID)
+        

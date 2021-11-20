@@ -19,27 +19,44 @@ class DiagonalLink(PyThread):
         #print("DiagonalLink: binding to:", (self.IP, self.Port))
         dsock.bind((self.IP, self.Port))
         
+    @property
+    def address(self):
+        return (self.IP, self.Port)
+        
     def run(self):
         while True:
             data, addr = self.Sock.recvfrom(65000)
             if data:
-                # check source sock address here - later - FIXME
                 t = Transmission.from_bytes(data)
-                #print("DiagonalLink: received:", t)
                 self.Node.routeTransmission(t, True)
-                    
+
+    #@synchronized
+    #def checkDiagonals(self):
+    #    if len(self.DiagonalNodes) < self.NDiagonals:
+    #        self.Node.pollForDiagonals()
+            
     @synchronized
-    def setDiagonals(self, nodes):
+    def addDiagonal(self, node_id, ip, port):
+        if (ip, port) not in self.DiagonalNodes:
+            self.DiagonalNodes.insert(0, (ip, port))
+            self.DiagonalNodes = self.DiagonalNodes[:self.NDiagonals]
+        print("DiagLink.addDiagonals: diagonals now:", self.DiagonalNodes)
+
+    @synchronized
+    def setDiagonals(self, addresses):
         #self.DiagonalNodes = []
-        self.DiagonalNodes = nodes[:]
-        #print ("DiagonalLink: set diagonals to:", nodes)
+        print("DiagLink.setDiagonals(", addresses, ")")
+        if len(addresses) > self.NDiagonals:
+            addresses = random.sample(addresses, self.NDiagonals)
+        self.DiagonalNodes = addresses
+        
+    def is_diagonal_link(self, address):
+        return address in self.DiagonalNodes
 
     @synchronized
     def send(self, transmission):
         data = transmission.to_bytes()
-        ndiagonals = min(self.NDiagonals, len(self.DiagonalNodes))
-        if ndiagonals:
-            diagonals = random.sample(self.DiagonalNodes, ndiagonals)
-            for node_id, addr in diagonals:
-                #print("DiagonalLink: sending to:", addr)
-                self.Sock.sendto(data, addr)
+        for addr in self.DiagonalNodes:
+            #print("DiagonalLink: sending to:", addr)
+            self.Sock.sendto(data, addr)
+        

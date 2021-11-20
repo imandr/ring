@@ -22,12 +22,13 @@ class PubSubAgent(EtherLinkDelegate):
         self.Topics.remove(topic)
         
     def publish(self, topic, article):
+        #print("broadcast")
         self.Ether.broadcast("ARTICLE %s %s" % (topic, article))
         
     def messageReceived(self, t):
-        msg = t.Payload
+        msg = t.payload_str
         cmd, rest = msg.split(None, 1)
-        #print("PubSubAgent.messageReceived:", t)
+        #print("PubSubAgent.messageReceived:", msg)
         if cmd == "ARTICLE":
             topic, article = rest.split(None, 1)
             if topic in self.SubscribedTopics:
@@ -58,8 +59,9 @@ class Publisher(PubSubAgent, PyThread):
                 article = " ".join(random.sample(self.Words, 3))
             else:
                 article = time.ctime(time.time())
-            print(f"publish: [{topic}] {article}")
-            self.publish(topic, article)
+            if False:
+                print(f"publish: [{topic}] {article}")
+                self.publish(topic, article)
             time.sleep(1.0+random.random()*10.0)
 
 class Subscriber(PubSubAgent, PyThread):
@@ -69,7 +71,7 @@ class Subscriber(PubSubAgent, PyThread):
         PubSubAgent.__init__(self, ether, topics)
     
     def published(self, topic, article):
-        print(f"published: [{topic}] {article}")
+        print(f"received: [{topic}] {article}")
         
     def run(self):
         self.Ether.init(self)
