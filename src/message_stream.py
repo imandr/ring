@@ -103,12 +103,14 @@ class MessageStream(object):
     def zing(self):
         self.Sock.sendall(b"Z:")
         
-    def peek(self, tmo=0):
+    def peek(self, tmo=None):
         with SocketTimeout(self.Sock, tmo):
             try:
                 b = self.Sock.recv(1, MSG_PEEK)
             except socket_timeout:
                 return False
+            except:
+                pass
             return True             # True if there is something to read or EOF
         
     def _read_n(self, n, t1=None):
@@ -144,7 +146,7 @@ class MessageStream(object):
             try:
                 while not self.Closed and c != end:
                     if t1 is not None and time.time() >= t1:
-                        print(f"{self} timing out")
+                        print(f"{self} timed out")
                         break
                     d = None if t1 is None else max(0.0, t1-time.time())
                     self.Sock.settimeout(d)
@@ -193,21 +195,22 @@ class MessageStream(object):
             raise ProtocolError(h)
             
     def recv(self, tmo=None):
-        t1 = None if tmo is None else time.time() + tmo
-        while self.Sock is not None and not self.Closed:
-            t, data = self._recv_msg(t1)
-            if t == 'Z':
-                self.Sock.sendall(b'z:')            # send zong
-            elif t == 'z':
-                pass                                # ignore zongs
-            elif t == 'M':
-                #print("MessageStream.recv: receited:", data)
-                return data
-            elif t is None:
-                return None
-            else:
-                raise ProtocolError(t)
-        return None
+        
+        if not self.peek(tmo):
+            raise StreamTimeout(f"{self}: timeout in initial peek() in recv()")
+
+        t, data = self._recv_msg()
+        if t == 'Z':
+            self.Sock.sendall(b'z:')            # send zong
+        elif t == 'z':
+            pass                                # ignore zongs
+        elif t == 'M':
+            #print("MessageStream.recv: receited:", data)
+            return data
+        elif t is None:
+            return None
+        else:
+            raise ProtocolError(t)
         
     def sendAndRecv(self, msg, tmo=None):
         #print("sendAndRecv: msg:", msg)

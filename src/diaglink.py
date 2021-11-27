@@ -28,7 +28,7 @@ class DiagonalLink(PyThread):
             data, addr = self.Sock.recvfrom(65000)
             if data:
                 t = Transmission.from_bytes(data)
-                self.Node.routeTransmission(t, True)
+                self.Node.transmissionReceived(t, True)
 
     #@synchronized
     #def checkDiagonals(self):

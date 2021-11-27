@@ -29,10 +29,10 @@ class UpLink(PyThread):
             stream.connect((ip, port), 1.0)
             #print(f"UpLink.connectStream: {stream} connected")
         except Exception as e:
-            #print("UpLink.connectStream: Error connecting to %s:%s: %s" % (ip, port, e))
+            print("UpLink.connectStream: Error connecting to %s:%s: %s" % (ip, port, e))
             stream = None
         else:
-            #print("connectStream: connected to:", ip, port)
+            print("connectStream: connected to:", ip, port)
             pass
         return stream
 
@@ -45,7 +45,10 @@ class UpLink(PyThread):
             down_ip, down_port = self.Node.downLinkAddress()
             hello = "HELLO %s %s %s" % (self.Node.ID, down_ip, down_port)
             #print("connect_to: sending", hello, "   and waiting for OK...")
-            ok = stream.sendAndRecv(hello)
+            try:    ok = stream.sendAndRecv(hello)
+            except: 
+                stream.close()
+                return False
             #print("connect_to: response to HELLO:", ok)
             if ok and ok.startswith(b"OK "):
                 ok = to_str(ok)
@@ -130,7 +133,7 @@ class UpLink(PyThread):
                     self.sleep(5.0)
                 if self.UpStream is not None:
                     try:    sent = self.UpStream.send(tbytes)
-                    except StreamTimeout:
+                    except:
                         pass
             #print("UpLink.send: sent:", sent)
         #print("UpLink.send(): done")

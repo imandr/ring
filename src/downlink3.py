@@ -6,7 +6,7 @@ from .transmission import Transmission
 
 from .py3 import to_str, to_bytes
 
-class DownConnection(PyThread):
+class DownConnection_old(PyThread):
     
     def __init__(self, mgr, sock):
         PyThread.__init__(self)
@@ -82,6 +82,78 @@ class DownConnection(PyThread):
                 self.Stream = None
         self.Manager.downDisconnected(self)
         self.Manager = None
+                
+class DownConnection(PyThread):
+    
+    def __init__(self, mgr, sock):
+        PyThread.__init__(self)
+        self.Sock = sock
+        self.Manager = mgr
+        self.NodeID = None
+        self.Address = None
+        self.Stream = None
+        self.Stop = False
+        
+    def init(self):
+        #print("DownConnection.init...")
+        
+        initialized = False
+        
+        self.Stream = stream = MessageStream(self.Sock, name="downlink")
+        try:    msg = stream.recv(tmo = 1.0)
+        except StreamError:
+            pass
+        else:
+            if msg and msg.startswith(b"HELLO "):
+                try:    
+                    msg = to_str(msg)
+                    cmd, node_id, ip, port = msg.split(None, 3)
+                    #print("DownConnection.init(): parsed:", cmd, node_id, ip, port)
+                    self.NodeID = node_id
+                    self.Address = (ip, int(port))
+                    stream.send("OK %s" % (self.Manager.nodeID))
+                except Exception as e:
+                    pass
+                else:
+                    initialized = True
+                
+        return initialized
+
+    @synchronized
+    def stop(self):
+        self.Stop = True
+        
+    @synchronized
+    def sendReconnect(self, addr):
+        if self.Stream is not None:
+            print("DownConnection: sending reconnect to ", addr)
+            self.Stream.send("RECONNECT %s %d" % addr)
+        
+    def run(self):
+        while not self.Stop:
+            try:    msg = self.Stream.recv()
+            except:
+                break
+            if msg: 
+                t = Transmission.from_bytes(msg)
+                #print("DownConnection: transmission redecived:", t)
+                self.Manager.transmissionReceived(t)
+            else:
+                #print("DownConnection.run: empty msg:", msg)
+                break
+                
+        if not self.Stop:
+            self.Stream.close()
+            self.Manager.downDisconnected(self)
+            self.Stream = None
+            
+        self.Manager = None
+
+    def close(self):
+        self.Stop = True
+        if self.Stream is not None:
+            self.Stream.close()
+            self.Stream = None
                 
 class DownLink(PyThread):
 
@@ -164,13 +236,20 @@ class DownLink(PyThread):
             #print("DownLink: accepted connection from", addr)
             if not self.Shutdown:
                 down_connection = DownConnection(self, sock)
-                down_connection.start()
+                if down_connection.init():
+                    print(f"DownLink: accepted connection from {down_connection.NodeID} {down_connection.Address}")
+                    if self.DownConnection is not None:
+                        self.DownConnection.stop()
+                        self.DownConnection.sendReconnect(down_connection.Address)
+                        self.DownConnection.close()
+                    self.DownConnection = down_connection
+                    down_connection.start()
         with self:
             self.ListenSock.close()
             self.DownConnection = None
                                 
     def transmissionReceived(self, t):
         #print("DownLink: transmissionReceived:", t)
-        self.Node.routeTransmission(t, False)
+        self.Node.transmissionReceived(t, False)
         #print("         return from transmissionReceived:", t.TID)
         

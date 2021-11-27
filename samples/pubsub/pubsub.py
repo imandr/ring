@@ -25,7 +25,7 @@ class PubSubAgent(EtherLinkDelegate):
         #print("broadcast")
         self.Ether.broadcast("ARTICLE %s %s" % (topic, article))
         
-    def messageReceived(self, t):
+    def messageReceived(self, t, from_diagonal):
         msg = t.payload_str
         cmd, rest = msg.split(None, 1)
         #print("PubSubAgent.messageReceived:", msg)
@@ -59,7 +59,7 @@ class Publisher(PubSubAgent, PyThread):
                 article = " ".join(random.sample(self.Words, 3))
             else:
                 article = time.ctime(time.time())
-            if False:
+            if True:
                 print(f"publish: [{topic}] {article}")
                 self.publish(topic, article)
             time.sleep(1.0+random.random()*10.0)
