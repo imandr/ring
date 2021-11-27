@@ -89,18 +89,6 @@ class SeenMemory(Primitive):
             lst = sorted(self.Memory.items(), key=lambda x: x[1][0], reverse=True)
             self.Memory = dict(lst[:self.LowWater])
             
-def read_config(path_or_file):
-    if isinstance(path_or_file, str):
-        path_or_file = open(path_or_file, "r")
-    cfg = yaml.load(path_or_file, Loader=yaml.SafeLoader)
-    cfg["seed_nodes"] = [
-        (ip, int(port)) 
-        for ip, port in 
-            [a.split(":", 1) for a in cfg["nodes"]]
-    ]
-    #print("read_config: nodes:", cfg["nodes"])
-    return cfg
-    
 class EtherLinkDelegate(object):    # virtual base class for delegates
     
     def transmissionReturned(self, t):
@@ -122,14 +110,14 @@ class EtherLinkDelegate(object):    # virtual base class for delegates
 class EtherLink(PyThread):
     
     Version = Version
-    ID_Length = 8           # in bytes
+    ID_Length = 4           # in bytes
     
-    def __init__(self, cfg, delegate = None):
+    def __init__(self, config):
         PyThread.__init__(self)
-        config = read_config(cfg)
-        self.Delegate = delegate
+        config = self.read_config(config)
         
-        self.ID_bytes = uuid.uuid4()
+        uid = uuid.uuid4()
+        self.ID_bytes = uid.bytes[:self.ID_Length]
         self.ID = self.ID_bytes.hex()
         
         self.Seen = SeenMemory(10000)               # data: (seen, sent_edge, sent_diagonal)
@@ -152,6 +140,16 @@ class EtherLink(PyThread):
     def __str__(self):
         return f"EtherLink({self.ID} @%s:%s)" % self.address
         
+    def read_config(self, config):
+        cfg = {}
+        cfg["seed_nodes"] = [
+            (ip, int(port)) 
+            for ip, port in 
+                [a.split(":", 1) for a in config["seed_nodes"]]
+        ]
+        #print("read_config: nodes:", cfg["nodes"])
+        return cfg
+
     def debug(self, *parts):
         if self.Debug:
             print(f"EtherLink:", *parts)
@@ -191,7 +189,7 @@ class EtherLink(PyThread):
         self.sendConnectivityPoll()
         while not self.Shutdown:
             self._purge_futures()
-            if time.time() > self.NextDiagonalCheck:
+            if False and time.time() > self.NextDiagonalCheck:
                 self.NextDiagonalCheck += self.DiagonalCheckInterval*(random.random() + 0.5)
                 #self.DiagonalLink.checkDiagonals()
                 self.sendConnectivityPoll()
@@ -212,8 +210,7 @@ class EtherLink(PyThread):
         return self.forward(t, False, False, False)
 
     def broadcast(self, payload, wait=False, timeout = None, guaranteed=False, **args):
-        t = Transmission.broadcast(self.ID, payload, guaranteed = guaranteed or promise, **args)
-
+        t = Transmission.broadcast(self.ID, payload, guaranteed = guaranteed, **args)
         ret = t
         if wait:
             future = Promise(tid)
@@ -247,11 +244,13 @@ class EtherLink(PyThread):
                 pass    # do not send
             elif t.decrement_edge_hops():
                 self.UpLink.send(t)
+                print("Link: >>> send (e):", t)
                 sent_edge = True
 
         if not sent_diagonal:
             if (not t.is_guaranteed) and t.decrement_diagonal_hops():
                 self.DiagonalLink.send(t)
+                print("Link: >>> send (d):", t)
                 sent_diagonal = True
             
         return sent_edge, sent_diagonal
@@ -264,9 +263,9 @@ class EtherLink(PyThread):
         new_payload = None
         stop = False
         tid = t.TID
-
         if tid in self.Futures:
             _, f = self.Futures.pop(tid)
+            #print("Link.receive: completing promise:", f)
             if t.system:
                 f.complete(SystemMessage.from_transmision(t))
             else:
@@ -354,16 +353,25 @@ class EtherLink(PyThread):
     #
     @synchronized
     def transmissionReceived(self, t, from_diagonal):
-        #print("Link.received:", t)
+        print("Link: <<< recv (%s):" % ('d' if from_diagonal else 'e',), t)
         tid = t.TID
         received, sent_edge, sent_diag = self.Seen.get(tid, (False, False, False))
         stop = False
+        #print("    received, sent_edge, sent_diag:", received, sent_edge, sent_diag)
 
-        if not received \
-                    and (t.is_broadcast or t.Dst == self.ID or t.Src == self.ID) \
-                    and not (t.is_guaranteed and t.Src == self.ID and from_diagonal):   # wait for proper message return
+        if not received:
             
-            if not received:
+            receive = False
+            if t.Dst == self.ID:    receive = True
+            elif t.is_broadcast:
+                if t.Src == self.ID:
+                    receive = not from_diagonal or not t.is_guaranteed
+                else:
+                    receive = True
+
+            #print("    receive =", receive)
+            if receive:
+                print("Link: [consume]")
                 new_payload, stop = self.receive(t, from_diagonal)
                 if t.mutable and new_payload is not None:
                     #print("updating payload")

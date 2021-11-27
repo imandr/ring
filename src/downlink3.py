@@ -126,7 +126,7 @@ class DownConnection(PyThread):
     @synchronized
     def sendReconnect(self, addr):
         if self.Stream is not None:
-            print("DownConnection: sending reconnect to ", addr)
+            #print("DownConnection: sending reconnect to ", addr)
             self.Stream.send("RECONNECT %s %d" % addr)
         
     def run(self):
@@ -237,7 +237,7 @@ class DownLink(PyThread):
             if not self.Shutdown:
                 down_connection = DownConnection(self, sock)
                 if down_connection.init():
-                    print(f"DownLink: accepted connection from {down_connection.NodeID} {down_connection.Address}")
+                    #print(f"DownLink: accepted connection from {down_connection.NodeID} {down_connection.Address}")
                     if self.DownConnection is not None:
                         self.DownConnection.stop()
                         self.DownConnection.sendReconnect(down_connection.Address)

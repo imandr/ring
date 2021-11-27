@@ -29,10 +29,10 @@ class UpLink(PyThread):
             stream.connect((ip, port), 1.0)
             #print(f"UpLink.connectStream: {stream} connected")
         except Exception as e:
-            print("UpLink.connectStream: Error connecting to %s:%s: %s" % (ip, port, e))
+            #print("UpLink.connectStream: Error connecting to %s:%s: %s" % (ip, port, e))
             stream = None
         else:
-            print("connectStream: connected to:", ip, port)
+            #print("connectStream: connected to:", ip, port)
             pass
         return stream
 

@@ -1,5 +1,5 @@
 from ring import EtherLink, to_str, to_bytes, EtherLinkDelegate
-from pythreader import Primitive, PyThread, Promise
+from pythreader import Primitive, PyThread, Promise, synchronized
 import yaml, sys, getopt, time, random, os, json, hashlib
 
 
@@ -21,6 +21,12 @@ class MemoryCell(EtherLinkDelegate, PyThread):
         h.update(to_bytes(data))
         value = h.digest()[-self.HashSize:]
         return int.from_bytes(value, "big")
+        
+    def parseTransmission(self, t):
+        msg = t.str
+        words = msg.split(None, 1)
+        command, rest = words
+        return command, rest
         
     def initialized(self, link_id):
         self.MyID = link_id
@@ -51,45 +57,50 @@ class MemoryCell(EtherLinkDelegate, PyThread):
         self.Memory[name] = value
         self.Link.poll(f"UPDATE {self.MyID} {name} {value}")
         
+    def transmissionReturned(self, t):
+        command, rest = self.parseTransmission(t)
+        if command == "QUERY":
+            name = rest
+            if t.Src == self.Link.ID:
+                # query returned - value not found
+                p = self.GetPromises.pop(name, None)
+                if p:   
+                    p.complete(None)
+
     def transmissionReceived(self, t, from_diagonal):
-        msg = t.str
-        words = msg.split(None, 1)
-        command, rest = words[0], words[1:]
+        command, rest = self.parseTransmission(t)
+        
+        #print("MemoryCell: received:", t.Src, "->", t.Dst, command, rest)
         
         if command == "UPDATE":
-            peer_id, name, peer_value = rest.split(None, 2)
+            peer_id, name, value = rest.split(None, 2)
             if self.i_am_closer(name, peer_id):
                 self.Memory[name] = value
                 self.Link.poll(f"UPDATE {self.MyID} {name} {value}")
                 return False        # stop the original message
             elif name in self.Memory:
                 del self.Memory[name]
+                
+            p = self.GetPromises.pop(name, None)
+            if p:   p.complete(value)
+                
         
         elif command == "QUERY":
-            
-            if t.Src == self.Link.ID:
-                # query returned - value not found
-                p = self.GetPromises.pop(name, None)
-                if p:   
-                    p.complete(None)
-                
-            elif name in self.Memory:
+            name = rest[0]
+            if name in self.Memory:
                 value = self.Memory[name]
                 self.Link.poll(f"UPDATE {self.MyID} {name} {value}")
                 return False        # stop the query
 
-    def transmissionReceived(self, t, from_diagonal):
-        elif command == "QUERY":
-            
-            if t.Src == self.Link.ID:
-                # query returned - value not found
-                p = self.GetPromises.pop(name, None)
-                if p:   
-                    p.complete(None)
-                
-        
-            
-            
+if __name__ == "__main__":
+    import getopt, sys, yaml
+    opts, args = getopt.getopt(sys.argv[1:], "c:")
+    opts = dict(opts)
+    config = yaml.load(open(opts["-c"], "r"), Loader=yaml.SafeLoader)
+    link = EtherLink(config["ring"])
+    cell = MemoryCell(link)
+    link.init(cell)
+    link.run()
         
     
         
