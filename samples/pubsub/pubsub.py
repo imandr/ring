@@ -25,8 +25,8 @@ class PubSubAgent(EtherLinkDelegate):
         #print("broadcast")
         self.Ether.broadcast("ARTICLE %s %s" % (topic, article))
         
-    def messageReceived(self, t, from_diagonal):
-        msg = t.payload_str
+    def transmissionReceived(self, t, from_diagonal):
+        msg = t.str
         cmd, rest = msg.split(None, 1)
         #print("PubSubAgent.messageReceived:", msg)
         if cmd == "ARTICLE":
@@ -80,14 +80,15 @@ class Subscriber(PubSubAgent, PyThread):
 
 
 if __name__ == '__main__':
-    import sys, getopt, random
+    import sys, getopt, random, yaml
         
     opts, args = getopt.getopt(sys.argv[1:], "c:")
     opts = dict(opts)
     if len(args) < 2 or not "-c" in opts:
         print(Usage)
         os.exit(1)
-    ether = EtherLink(opts["-c"])
+    config = yaml.load(open(opts["-c"], "r"), Loader=yaml.SafeLoader)
+    ether = EtherLink(config["ring"])
 
     mode = args[0]
     if mode == "publish":

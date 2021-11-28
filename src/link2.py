@@ -378,7 +378,7 @@ class EtherLink(PyThread):
                     t.payload = new_payload
                 received = True
 
-        if t.Src != self.ID:
+        if t.Src != self.ID and t.Dst != self.ID:
             if not stop and not (sent_edge and sent_diag):
                 sent_edge, sent_diag = self.forward(t, sent_edge, sent_diag, from_diagonal)
         

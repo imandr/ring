@@ -1,10 +1,13 @@
 import sys, getopt, yaml
 from webpie import WPApp, WPHandler, HTTPServer
 
-from cell import MemoryCell
+from cell_fast import MemoryCell
 from ring import EtherLink
 
 class Handler(WPHandler):
+    
+    def __init__(self, request, app):
+        WPHandler.__init__(self, request, app)
     
     def get(self, request, name):
         cell = self.App.Cell
@@ -34,4 +37,3 @@ link.start()
 server = HTTPServer(port, App(cell))
 server.start()
 server.join()
-
