@@ -69,6 +69,12 @@ class MemoryCell(EtherLinkDelegate, PyThread):
                 p = self.GetPromises.pop(name, None)
                 if p:   
                     p.complete(None)
+                    
+        elif command == "UPDATE":
+            peer_id, name, value = rest.split(None, 2)
+            if name in self.Memory:
+                value = self.Memory[name]
+                self.Link.poll(f"REPLICA {name} {value}", max_edge_hops=2)
 
     def transmissionReceived(self, t, from_diagonal):
         command, rest = self.parseTransmission(t)
@@ -103,6 +109,13 @@ class MemoryCell(EtherLinkDelegate, PyThread):
                 #print("sending value...")
                 self.Link.send_to(f"VALUE {name} {value}", t.Src, guaranteed=True)
                 return False        # stop the query
+                
+        elif command == "REPLICA":
+            name, value = rest.split(None, 1)
+            self.Memory[name] = value
+            p = self.GetPromises.pop(name, None)
+            if p:   
+                p.complete(value)
 
 if __name__ == "__main__":
     import getopt, sys, yaml

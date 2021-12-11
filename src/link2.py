@@ -219,6 +219,9 @@ class EtherLink(PyThread):
         self.forward(t, False, False, False)
         return ret
         
+    def shout(self, payload, **args):
+        return self.broadcast(payload, **args)
+        
     def poll(self, payload, guaranteed=True, **args):
         return self.broadcast(payload, 
             guaranteed=True,    # override
@@ -254,6 +257,9 @@ class EtherLink(PyThread):
                 sent_diagonal = True
             
         return sent_edge, sent_diagonal
+        
+    def send(self, t):
+        return self.forward(t, False, False, False)
             
     #
     # message processing
